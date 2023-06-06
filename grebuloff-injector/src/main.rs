@@ -244,16 +244,14 @@ fn await_game_process() -> u32 {
 fn main() {
     let args = Args::parse();
 
-    let mut user_path = String::new();
-    let mut process_info;
+    let process_info;
 
     match args {
         Args::Launch {
             game_path,
-            user_path: _user_path,
+            user_path,
         } => {
-            user_path = _user_path.to_str().unwrap().to_string();
-            process_info = unsafe { spawn_game_process(game_path, _user_path) };
+            process_info = unsafe { spawn_game_process(game_path, user_path) };
         }
         Args::Inject => {
             process_info = ProcessInfo {
@@ -277,7 +275,7 @@ fn main() {
 
     let current_exe = std::env::current_exe().unwrap();
     let loader_path = current_exe.join("../grebuloff.dll");
-    let grebuloff_path = current_exe.join(".");
+    let grebuloff_path = current_exe.join("../");
 
     unsafe {
         if process_info.thread_handle.0 != 0 {
@@ -300,11 +298,10 @@ fn main() {
     println!("calling entrypoint...");
     let remote_load = unsafe {
         syringe
-            .get_payload_procedure::<fn(Vec<u8>, Vec<u8>)>(injected_payload, "load")
+            .get_payload_procedure::<fn(Vec<u8>)>(injected_payload, "init_native")
     }.unwrap().unwrap();
     let str_as_vec = grebuloff_path.to_str().unwrap().as_bytes().to_vec();
-    let user_path_vec = user_path.as_bytes().to_vec();
-    remote_load.call(&str_as_vec, &user_path_vec).unwrap();
+    remote_load.call(&str_as_vec).unwrap();
 
     println!("done!");
 }

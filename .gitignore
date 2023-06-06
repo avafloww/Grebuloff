@@ -13,3 +13,6 @@ target/
 # macOS
 .DS_Store
 ._.*
+
+# .NET
+obj/

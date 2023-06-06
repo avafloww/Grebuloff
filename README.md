@@ -10,6 +10,8 @@ TypeScript, can be developed using any code that can run on the V8 engine, inclu
 ### How does Grebuloff relate to Dalamud?
 
 **Grebuloff is _not_ a replacement for Dalamud.** These projects have entirely different design philosophies.
+Grebuloff can even run alongside Dalamud using a helper plugin, allowing you to use both frameworks at the
+same time; however, this feature, like everything else, is highly experimental.
 
 Dalamud plugins are able to extensively alter a running game, thanks to an extensive API and, where its API
 falls short, the ability to hook game functions and directly modify memory. However, this often can come
@@ -42,19 +44,15 @@ Without the work of these people and groups, this project would not be possible.
 Thanks to:
 
 - [The contributors to Grebuloff](https://github.com/avafloww/Grebuloff/graphs/contributors)
-
 - [goat](https://github.com/goaaats/) and all of the folks at [@goatcorp](https://github.com/goatcorp), for
   their tireless work on creating Dalamud & XIVLauncher, the projects that changed the game and inspired us all
-
 - [aers](https://github.com/aers), [Pohky](https://github.com/Pohky), [Caraxi](https://github.com/Caraxi),
   [daemitus](https://github.com/daemitus),
   and [all of the contributors](https://github.com/aers/FFXIVClientStructs/graphs/contributors)
   to [FFXIVClientStructs](https://github.com/aers/FFXIVClientStructs), for their extensive research into the
   game's internals
-
 - The community developers at [goat place](https://goat.place), also for their extensive research into the
   game's internals, as well as for entertaining my constant memery
-
 - Square Enix, for creating the critically acclaimed game that we all know and love
 
 ## License
