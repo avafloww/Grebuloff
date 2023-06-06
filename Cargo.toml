@@ -1,0 +1,3 @@
+[workspace]
+members = ["grebuloff-injector", "grebuloff"]
+resolver = "2"

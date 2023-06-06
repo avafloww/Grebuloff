@@ -1,0 +1,15 @@
+gameConfig/
+
+# Rust
+target/
+
+# IntelliJ
+.idea/
+*.iml
+
+# VSCode
+.vscode/
+
+# macOS
+.DS_Store
+._.*

@@ -1,0 +1,11 @@
+[package]
+name = "grebuloff"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dll-syringe = { version = "0.15.2", default_features = false, features = ["payload-utils"] }
+msgbox = "0.7.0"

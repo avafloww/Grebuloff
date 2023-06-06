@@ -1,0 +1,64 @@
+# Grebuloff
+
+Grebuloff is an experimental addon framework for Final Fantasy XIV. It introduces a new concept of what
+plugins can be, focusing on enabling creation of plugins that are isolated, secure, stable, and add onto the vanilla
+game in an incremental fashion.
+
+The core of Grebuloff is built in Rust and TypeScript. Plugins, while typically written in JavaScript or
+TypeScript, can be developed using any code that can run on the V8 engine, including WebAssembly.
+
+### How does Grebuloff relate to Dalamud?
+
+**Grebuloff is _not_ a replacement for Dalamud.** These projects have entirely different design philosophies.
+
+Dalamud plugins are able to extensively alter a running game, thanks to an extensive API and, where its API
+falls short, the ability to hook game functions and directly modify memory. However, this often can come
+at the cost of stability (especially during game patches) and security, as plugins have unscoped, unsandboxed
+access to your game and your computer.
+
+Grebuloff is intended to offer a safer, more isolated framework for plugins. All plugins run in an isolated
+V8 context, and only have access to the APIs they have explicitly requested and been granted access to.
+
+It's important to note that, since third-party tools are against Square Enix's Terms of Service, use of either
+Grebuloff or Dalamud carries risks of penalties to your account. Although both projects make efforts to mitigate
+this risk, the responsibility of account safety ultimately falls upon the user.
+
+## Roadmap
+
+Grebuloff is currently in a very early stage of development. If you are a new community developer looking
+to make the Next Big Plugin, or an end-user looking for a wide ecosystem of addons for the game,
+**you should use XIVLauncher & Dalamud**.
+
+- [X] Injector that mostly works, for both fake-launch & inject into a running game
+- [ ] V8 engine bringup for core components
+- [ ] UI bringup using React (as opposed to `MessageBox`)
+- [ ] Basic plugin support (including basic game APIs)
+- [ ] Game APIs for all the things, ever
+
+## Credits & Acknowledgements
+
+Without the work of these people and groups, this project would not be possible.
+
+Thanks to:
+
+- [The contributors to Grebuloff](https://github.com/avafloww/Grebuloff/graphs/contributors)
+
+- [goat](https://github.com/goaaats/) and all of the folks at [@goatcorp](https://github.com/goatcorp), for
+  their tireless work on creating Dalamud & XIVLauncher, the projects that changed the game and inspired us all
+
+- [aers](https://github.com/aers), [Pohky](https://github.com/Pohky), [Caraxi](https://github.com/Caraxi),
+  [daemitus](https://github.com/daemitus),
+  and [all of the contributors](https://github.com/aers/FFXIVClientStructs/graphs/contributors)
+  to [FFXIVClientStructs](https://github.com/aers/FFXIVClientStructs), for their extensive research into the
+  game's internals
+
+- The community developers at [goat place](https://goat.place), also for their extensive research into the
+  game's internals, as well as for entertaining my constant memery
+
+- Square Enix, for creating the critically acclaimed game that we all know and love
+
+## License
+
+Grebuloff is licensed under LGPL-3.0. Please refer to the `LICENSE` file for more details.
+
+Dependencies are licensed under their project's respective licenses.
