@@ -1,11 +1,22 @@
 #![allow(unsafe_code)]
 
-use std::os::windows::io::FromRawHandle;
 use clap::Parser;
 use dll_syringe::{process::OwnedProcess, Syringe};
+use std::os::windows::io::FromRawHandle;
 use std::path::PathBuf;
 use std::ptr::addr_of_mut;
 use sysinfo::{PidExt, ProcessExt, SystemExt};
+use windows::Win32::Foundation::{CloseHandle, LUID};
+use windows::Win32::Security::Authorization::{
+    GetSecurityInfo, SetSecurityInfo, GRANT_ACCESS, SE_KERNEL_OBJECT,
+};
+use windows::Win32::Security::{
+    AdjustTokenPrivileges, LookupPrivilegeValueW, PrivilegeCheck, ACE_FLAGS, ACL,
+    DACL_SECURITY_INFORMATION, LUID_AND_ATTRIBUTES, PRIVILEGE_SET, SECURITY_DESCRIPTOR,
+    SE_DEBUG_NAME, SE_PRIVILEGE_ENABLED, SE_PRIVILEGE_REMOVED, TOKEN_ADJUST_PRIVILEGES,
+    TOKEN_PRIVILEGES, TOKEN_QUERY,
+};
+use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken, CREATE_SUSPENDED};
 use windows::{
     core::{HSTRING, PWSTR},
     imp::GetLastError,
@@ -19,19 +30,12 @@ use windows::{
         System::Threading::{CreateProcessW, ResumeThread, STARTUPINFOW},
     },
 };
-use windows::Win32::Foundation::{CloseHandle, LUID};
-use windows::Win32::Security::{ACE_FLAGS, ACL, AdjustTokenPrivileges, DACL_SECURITY_INFORMATION, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES, PRIVILEGE_SET, PrivilegeCheck, SE_DEBUG_NAME, SE_PRIVILEGE_ENABLED, SE_PRIVILEGE_REMOVED, SECURITY_DESCRIPTOR, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY};
-use windows::Win32::Security::Authorization::{GetSecurityInfo, GRANT_ACCESS, SE_KERNEL_OBJECT, SetSecurityInfo};
-use windows::Win32::System::Threading::{CREATE_SUSPENDED, GetCurrentProcess, OpenProcessToken};
 
 #[derive(Parser)]
 enum Args {
     Launch {
         #[clap(short, long)]
         game_path: PathBuf,
-
-        #[clap(short, long)]
-        user_path: PathBuf,
     },
     Inject,
 }
@@ -53,7 +57,7 @@ impl Drop for ProcessInfo {
 }
 
 // ported from Dalamud launch code
-unsafe fn spawn_game_process(game_path: PathBuf, user_path: PathBuf) -> ProcessInfo {
+unsafe fn spawn_game_process(game_path: PathBuf) -> ProcessInfo {
     let mut explicit_access = std::mem::zeroed::<EXPLICIT_ACCESS_W>();
 
     let username = std::env::var("USERNAME").unwrap();
@@ -96,9 +100,8 @@ unsafe fn spawn_game_process(game_path: PathBuf, user_path: PathBuf) -> ProcessI
     startup_info.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
 
     let cmd_line = format!(
-        "\"{}\" DEV.TestSID=0 language=1 DEV.MaxEntitledExpansionID=4 DEV.GameQuitMessageBox=0 UserPath={}\0",
-        game_path.to_str().unwrap(),
-        user_path.to_str().unwrap()
+        "\"{}\" DEV.TestSID=0 language=1 DEV.MaxEntitledExpansionID=4 DEV.GameQuitMessageBox=0\0",
+        game_path.to_str().unwrap()
     );
 
     let game_dir = game_path.parent().unwrap();
@@ -127,16 +130,14 @@ unsafe fn spawn_game_process(game_path: PathBuf, user_path: PathBuf) -> ProcessI
         process_information.hProcess,
         TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
         &mut token_handle,
-    ).as_bool() {
+    )
+    .as_bool()
+    {
         panic!("OpenProcessToken failed");
     }
 
     let mut luid_debug_privilege = std::mem::zeroed::<LUID>();
-    if !LookupPrivilegeValueW(
-        None,
-        SE_DEBUG_NAME,
-        &mut luid_debug_privilege,
-    ).as_bool() {
+    if !LookupPrivilegeValueW(None, SE_DEBUG_NAME, &mut luid_debug_privilege).as_bool() {
         panic!("LookupPrivilegeValueW failed");
     }
 
@@ -150,11 +151,7 @@ unsafe fn spawn_game_process(game_path: PathBuf, user_path: PathBuf) -> ProcessI
     };
 
     let mut b_result: i32 = 0;
-    if !PrivilegeCheck(
-        token_handle,
-        &mut required_privileges,
-        &mut b_result,
-    ).as_bool() {
+    if !PrivilegeCheck(token_handle, &mut required_privileges, &mut b_result).as_bool() {
         panic!("PrivilegeCheck failed");
     }
 
@@ -176,7 +173,9 @@ unsafe fn spawn_game_process(game_path: PathBuf, user_path: PathBuf) -> ProcessI
             0,
             None,
             None,
-        ).as_bool() {
+        )
+        .as_bool()
+        {
             panic!("AdjustTokenPrivileges failed");
         }
     }
@@ -203,8 +202,10 @@ unsafe fn copy_acl_from_self_to_target(target_process: HANDLE) {
         None,
         Some(addr_of_mut!(acl)),
         None,
-        None
-    ).is_ok() {
+        None,
+    )
+    .is_ok()
+    {
         panic!("GetSecurityInfo failed");
     }
 
@@ -215,8 +216,10 @@ unsafe fn copy_acl_from_self_to_target(target_process: HANDLE) {
         None,
         None,
         Some(acl),
-        None
-    ).is_ok() {
+        None,
+    )
+    .is_ok()
+    {
         panic!("SetSecurityInfo failed");
     }
 }
@@ -247,11 +250,8 @@ fn main() {
     let process_info;
 
     match args {
-        Args::Launch {
-            game_path,
-            user_path,
-        } => {
-            process_info = unsafe { spawn_game_process(game_path, user_path) };
+        Args::Launch { game_path } => {
+            process_info = unsafe { spawn_game_process(game_path) };
         }
         Args::Inject => {
             process_info = ProcessInfo {
@@ -262,11 +262,16 @@ fn main() {
         }
     }
 
-    println!("pid: {} - tid: {}", process_info.pid, process_info.thread_handle.0);
+    println!(
+        "pid: {} - tid: {}",
+        process_info.pid, process_info.thread_handle.0
+    );
 
     let target;
     if process_info.process_handle.0 != 0 {
-        target = unsafe { OwnedProcess::from_raw_handle(std::mem::transmute(process_info.process_handle)) };
+        target = unsafe {
+            OwnedProcess::from_raw_handle(std::mem::transmute(process_info.process_handle))
+        };
     } else {
         target = OwnedProcess::from_pid(process_info.pid).unwrap();
     }
@@ -274,7 +279,7 @@ fn main() {
     let syringe = Syringe::for_process(target);
 
     let current_exe = std::env::current_exe().unwrap();
-    let loader_path = current_exe.join("../grebuloff.dll");
+    let loader_path = current_exe.join("../grebuloff_runtime.dll");
     let grebuloff_path = current_exe.join("../");
 
     unsafe {
@@ -296,10 +301,10 @@ fn main() {
     let injected_payload = syringe.inject(loader_path).unwrap();
 
     println!("calling entrypoint...");
-    let remote_load = unsafe {
-        syringe
-            .get_payload_procedure::<fn(Vec<u8>)>(injected_payload, "init_native")
-    }.unwrap().unwrap();
+    let remote_load =
+        unsafe { syringe.get_payload_procedure::<fn(Vec<u8>)>(injected_payload, "init_native") }
+            .unwrap()
+            .unwrap();
     let str_as_vec = grebuloff_path.to_str().unwrap().as_bytes().to_vec();
     remote_load.call(&str_as_vec).unwrap();
 

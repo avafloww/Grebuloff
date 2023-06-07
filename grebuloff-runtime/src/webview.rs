@@ -122,8 +122,8 @@ impl WebView {
                 .SetBounds(RECT {
                     left: 0,
                     top: 0,
-                    right: size.cx / 2,
-                    bottom: size.cy / 2,
+                    right: size.cx,
+                    bottom: size.cy,
                 })
                 .expect("Failed to set bounds");
             controller

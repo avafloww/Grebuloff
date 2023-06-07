@@ -1,18 +1,18 @@
 mod dalamud;
-mod webview;
 mod runtime;
+mod webview;
 
-use anyhow::Result;
-use std::path::PathBuf;
-use std::sync::OnceLock;
-use std::thread;
-use log::{error, info};
-use msgbox::IconType;
-use tokio::runtime::Handle;
-use tokio::task;
 use crate::dalamud::DalamudPipe;
 use crate::runtime::init_core_runtime;
 use crate::webview::WebView;
+use anyhow::Result;
+use log::{error, info};
+use msgbox::IconType;
+use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::thread;
+use tokio::runtime::Handle;
+use tokio::task;
 
 static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static DALAMUD_PIPE: OnceLock<DalamudPipe> = OnceLock::new();
@@ -88,12 +88,7 @@ fn setup_logging(dir: &PathBuf) {
                     backtrace
                 )
             }
-            None => format!(
-                "thread '{}' panicked at '{}'{:?}",
-                thread,
-                msg,
-                backtrace
-            ),
+            None => format!("thread '{}' panicked at '{}'{:?}", thread, msg, backtrace),
         };
 
         error!("{}", formatted);
@@ -110,10 +105,14 @@ fn init_sync(runtime_dir: Vec<u8>, dalamud_pipe_name: Option<Vec<u8>>) {
     setup_logging(&runtime_dir);
 
     // set up the tokio runtime
-    TOKIO_RT.set(tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()).expect("failed to set tokio runtime");
+    TOKIO_RT
+        .set(
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        )
+        .expect("failed to set tokio runtime");
 
     let tokio_rt = TOKIO_RT.get().unwrap();
 
@@ -130,7 +129,7 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
 
     info!("--------------------------------------------------");
     info!(
-        "Grebuloff Framework starting (load method: {:?})",
+        "Grebuloff Runtime starting (load method: {:?})",
         get_load_method()
     );
     info!("Build time: {}", env!("VERGEN_BUILD_TIMESTAMP"));
@@ -142,7 +141,9 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
     }
 
     // handle anything that needs to be loaded sync first
-    init_core_runtime().await.expect("failed to init core runtime");
+    init_core_runtime()
+        .await
+        .expect("failed to init core runtime");
 
     // call async init now
     task::spawn(init_async());
@@ -155,7 +156,8 @@ async fn init_async() -> Result<()> {
         info!("webview2 init");
         let webview = WebView::new();
         webview.run().unwrap();
-    }).await?;
+    })
+    .await?;
 
     Ok(())
 }

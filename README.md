@@ -5,7 +5,7 @@ plugins can be, focusing on enabling creation of plugins that are isolated, secu
 game in an incremental fashion.
 
 The core of Grebuloff is built in Rust and TypeScript. Plugins, while typically written in JavaScript or
-TypeScript, can be developed using any code that can run on the V8 engine, including WebAssembly.
+TypeScript, can be developed using any technology that can run on the V8 engine, including WebAssembly.
 
 ### How does Grebuloff relate to Dalamud?
 
@@ -36,6 +36,18 @@ to make the Next Big Plugin, or an end-user looking for a wide ecosystem of addo
 - [ ] UI bringup using React (as opposed to `MessageBox`)
 - [ ] Basic plugin support (including basic game APIs)
 - [ ] Game APIs for all the things, ever
+
+## Architecture
+
+### Components
+
+| Component            | Language   | Description                                                                                          |
+|----------------------|------------|------------------------------------------------------------------------------------------------------|
+| `grebuloff-injector` | Rust       | Injects the runtime into the game process.                                                           |
+| `grebuloff-runtime`  | Rust       | The entrypoint of Grebuloff. Manages V8 isolates and bridges them to the game.                       |
+| `grebuloff-dalamud`  | C#         | A Dalamud helper plugin that allows Grebuloff and Dalamud to run simultaneously.                     |
+| `grebuloff-core`     | TypeScript | The core library for the Grebuloff runtime. Runs in a "privileged" V8 isolate.                       |
+| `grebuloff-ui`       | TypeScript | Provides UI services for Grebuloff and plugins. Written in React, and runs in the WebView2 instance. |
 
 ## Credits & Acknowledgements
 

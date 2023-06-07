@@ -1,0 +1,12 @@
+{
+  "name": "grebuloff-core",
+  "version": "0.0.0",
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.1.3",
+    "rimraf": "^5.0.1"
+  }
+}

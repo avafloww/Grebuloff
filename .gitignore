@@ -1,5 +1,9 @@
+.bonelessrc.json
+
 gameConfig/
 local/
+dist/
+build/
 
 # Rust
 target/
@@ -17,3 +21,32 @@ target/
 
 # .NET
 obj/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+grebuloff*.log
+
+# Dependency directories
+node_modules/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
