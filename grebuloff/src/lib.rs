@@ -1,10 +1,12 @@
 mod dalamud;
+mod webview;
 
-use std::path::PathBuf;
-use std::sync::OnceLock;
+use crate::dalamud::DalamudPipe;
+use crate::webview::WebView;
 use log::info;
 use msgbox::IconType;
-use crate::dalamud::DalamudPipe;
+use std::path::PathBuf;
+use std::sync::OnceLock;
 
 static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static DALAMUD_PIPE: OnceLock<DalamudPipe> = OnceLock::new();
@@ -60,21 +62,28 @@ fn init_sync(runtime_dir: Vec<u8>, dalamud_pipe_name: Option<Vec<u8>>) {
     let runtime_dir = PathBuf::from(std::str::from_utf8(&runtime_dir).unwrap());
 
     // set up the tokio runtime and Dalamud pipe instance
-    TOKIO_RT.set(tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()).expect("failed to set tokio runtime");
+    TOKIO_RT
+        .set(
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        )
+        .expect("failed to set tokio runtime");
 
     if let Some(pipe_name) = dalamud_pipe_name {
-        DALAMUD_PIPE.set(
-            DalamudPipe::new(&std::str::from_utf8(&pipe_name).unwrap())
-        ).expect("failed to set Dalamud pipe");
+        DALAMUD_PIPE
+            .set(DalamudPipe::new(std::str::from_utf8(&pipe_name).unwrap()))
+            .expect("failed to set Dalamud pipe");
     }
 
     setup_logging(runtime_dir);
 
     info!("--------------------------------------------------");
-    info!("Grebuloff Framework starting (load method: {:?})", get_load_method());
+    info!(
+        "Grebuloff Framework starting (load method: {:?})",
+        get_load_method()
+    );
     info!("Build time: {}", env!("VERGEN_BUILD_TIMESTAMP"));
     info!("Git commit: {}", env!("VERGEN_GIT_DESCRIBE"));
 
@@ -93,4 +102,12 @@ fn init_sync(runtime_dir: Vec<u8>, dalamud_pipe_name: Option<Vec<u8>>) {
 
 async fn init_async() {
     info!("async init starting");
+
+    let a = tokio::task::spawn_blocking(|| {
+        info!("nuts");
+        let webview = WebView::new();
+        info!("deez");
+        webview.run().unwrap();
+    });
+    a.await.unwrap();
 }
