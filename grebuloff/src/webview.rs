@@ -72,7 +72,6 @@ impl WebView {
         }
 
         let hwnd = unsafe { WindowsAndMessaging::GetForegroundWindow() };
-        info!("hwnd: {:?}", hwnd);
 
         let environment = {
             let (tx, rx) = mpsc::channel();
@@ -83,9 +82,7 @@ impl WebView {
                         .map_err(webview2_com::Error::WindowsError)
                 }),
                 Box::new(move |error_code, environment| {
-                    info!("error_code: {:?}", error_code);
                     error_code?;
-                    info!("the");
                     tx.send(environment.expect("Failed to get environment"))
                         .expect("Failed to send environment");
                     Ok(())
@@ -93,7 +90,6 @@ impl WebView {
             )
             .expect("Failed to create environment");
 
-            info!("recv");
             rx.recv().expect("Failed to receive environment")
         };
 
@@ -107,9 +103,7 @@ impl WebView {
                         .map_err(webview2_com::Error::WindowsError)
                 }),
                 Box::new(move |error_code, controller| {
-                    info!("burgh");
                     error_code?;
-                    info!("sending");
                     tx.send(controller.expect("Failed to get controller"))
                         .expect("Failed to send controller");
                     Ok(())
@@ -117,7 +111,6 @@ impl WebView {
             )
             .expect("Failed to create controller");
 
-            info!("gughghghghghgh");
             rx.recv().expect("Failed to receive controller")
         };
 
