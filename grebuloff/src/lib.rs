@@ -142,7 +142,6 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
     }
 
     // handle anything that needs to be loaded sync first
-    let tokio_rt = TOKIO_RT.get().unwrap();
     init_core_runtime().await.expect("failed to init core runtime");
 
     // call async init now
@@ -152,12 +151,11 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
 async fn init_async() -> Result<()> {
     info!("async init starting");
 
-    let a = task::spawn_blocking(|| {
+    task::spawn_blocking(|| {
         info!("webview2 init");
         let webview = WebView::new();
         webview.run().unwrap();
-    });
-    a.await?;
+    }).await?;
 
     Ok(())
 }
