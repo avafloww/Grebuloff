@@ -13,10 +13,12 @@ use webview2_com::{
     ExecuteScriptCompletedHandler,
     Microsoft::Web::WebView2::Win32::{
         CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
+        ICoreWebView2Controller2, COREWEBVIEW2_COLOR,
     },
     NavigationCompletedEventHandler, WebMessageReceivedEventHandler,
 };
 use windows::{
+    core::ComInterface,
     core::PWSTR,
     Win32::{
         Foundation::{HWND, LPARAM, RECT, SIZE, WPARAM},
@@ -118,6 +120,17 @@ impl WebView {
         let mut client_rect = RECT::default();
         unsafe {
             WindowsAndMessaging::GetClientRect(hwnd, &mut client_rect as *mut RECT);
+            let controller2: ICoreWebView2Controller2 =
+                controller.cast().expect("Failed to cast to controller2");
+            controller2
+                .SetDefaultBackgroundColor(COREWEBVIEW2_COLOR {
+                    R: 0,
+                    G: 0,
+                    B: 0,
+                    A: 0,
+                })
+                .expect("Failed to set background to transparent");
+
             controller
                 .SetBounds(RECT {
                     left: 0,
@@ -145,7 +158,8 @@ impl WebView {
             thread_id,
             bindings: Arc::new(Mutex::new(HashMap::new())),
             parent: Arc::new(hwnd),
-            url: Arc::new(Mutex::new(String::from("https://bing.com/"))),
+            // todo: move this url to config - in release builds we want to serve from a local file
+            url: Arc::new(Mutex::new(String::from("http://localhost:3000/"))),
         };
 
         webview
