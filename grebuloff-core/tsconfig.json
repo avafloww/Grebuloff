@@ -9,7 +9,7 @@
     "allowJs": true,
     "checkJs": true,
     "declaration": true,
-    "outDir": "./dist",
+    "outDir": "../build/core",
     "sourceRoot": "./src",
     "newLine": "lf",
     "inlineSourceMap": true,
