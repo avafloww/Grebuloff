@@ -5,7 +5,7 @@
 import child_process from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import {fileURLToPath} from 'url';
+import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,7 +30,7 @@ const CS_EXPORTER_BIN = path.join(CS_EXPORTER_BIN_DIR, 'RustExporter.exe');
 const EXE_ARTIFACT_PATHS = {
   'injector': path.join(OUTPUT_DIR, 'grebuloff-injector.exe'),
   'runtime': path.join(OUTPUT_DIR, 'grebuloff_runtime.dll'),
-}
+};
 
 // Project names (without the leading grebuloff-)
 const RUST_PROJECTS = [
@@ -340,7 +340,6 @@ if (opType === 'build') {
       } else if (JS_PROJECTS.includes(target)) {
         console.log(`Building JS project: ${target}...`);
         await execFor(target, 'npm install && npm run build');
-        // todo: copy artifacts
       } else if (DOTNET_PROJECTS.includes(target)) {
         console.log(`Building .NET project: ${target}...`);
         await execFor(target, 'dotnet build');

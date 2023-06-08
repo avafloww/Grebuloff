@@ -8,8 +8,6 @@ use include_dir::{include_dir, Dir};
 use log::{error, info, Log};
 use std::rc::Rc;
 
-static RUNTIME_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/runtime/js");
-
 pub async fn init_core_runtime() -> Result<()> {
     info!("initializing core runtime");
 
