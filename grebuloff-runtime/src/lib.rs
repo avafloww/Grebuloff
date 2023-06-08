@@ -141,7 +141,7 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
     }
 
     // handle anything that needs to be loaded sync first
-    init_core_runtime()
+    init_core_runtime(&runtime_dir)
         .await
         .expect("failed to init core runtime");
 
