@@ -152,12 +152,19 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
 async fn init_async() -> Result<()> {
     info!("async init starting");
 
-    task::spawn_blocking(|| {
-        info!("webview2 init");
-        let webview = WebView::new();
-        webview.run().unwrap();
-    })
-    .await?;
+    // temporarily disabled; webview2 has no clickthrough support as-is and we kinda need that
+    // probably going to have to render offscreen and graphics capture/bitblt to the screen
+    // but hey even that's hard! wv2 has no offscreen rendering API! :D
+    // some useful links:
+    // https://github.com/robmikh/screenshot-rs/tree/main - example code for win10 capture api in rust
+    // https://github.com/jnschulze/flutter-webview-windows - example where this technique is used
+    //
+    // task::spawn_blocking(|| {
+    //     info!("webview2 init");
+    //     let webview = WebView::new();
+    //     webview.run().unwrap();
+    // })
+    // .await?;
 
     Ok(())
 }
