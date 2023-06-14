@@ -1,5 +1,7 @@
 use ffxivclientstructs::{MemberFunctionSignature, StaticAddressSignature, VTableSignature};
-use log::info;
+use log::{debug, info};
+use sigscanner::scanning::find_sig;
+use sigscanner::signatures::parse_sig_str;
 use windows::Win32::System::LibraryLoader::GetModuleHandleA;
 use windows::Win32::System::ProcessStatus::{GetModuleInformation, MODULEINFO};
 use windows::Win32::System::Threading::GetCurrentProcess;
@@ -8,9 +10,6 @@ static mut MODULE_START: *const u8 = std::ptr::null();
 static mut MODULE_SIZE: usize = 0;
 
 pub unsafe fn prepare() -> anyhow::Result<()> {
-    // use the windows api to get the start address and image size of module ffxiv_dx11.exe
-    // call GetModuleHandleA(NULL)
-
     let handle = GetModuleHandleA(None)?;
     let mut info = std::mem::zeroed::<MODULEINFO>();
     let result = GetModuleInformation(
@@ -34,17 +33,74 @@ pub unsafe fn prepare() -> anyhow::Result<()> {
 
     Ok(())
 }
-pub fn resolve_vtable(input: &VTableSignature) -> Option<*const usize> {
-    // TODO
-    None
+
+pub unsafe fn resolve_vtable(input: &VTableSignature) -> Option<*const usize> {
+    let sig = parse_sig_str(input.signature.0);
+    let result = find_sig(MODULE_START, MODULE_SIZE, sig);
+
+    if result == std::ptr::null() {
+        debug!("resolve_vtable: couldn't resolve {}", input.signature.0);
+        None
+    } else {
+        // get the 4 bytes at input.offset bytes past the result
+        let mut result = result.offset(input.offset);
+
+        if input.is_pointer {
+            // dereference the pointer
+            result = std::ptr::read_unaligned(result as *const *const u8);
+        }
+
+        debug!(
+            "resolve_vtable: resolved {} (offset {}, is_pointer {}) - {:p}",
+            input.signature.0, input.offset, input.is_pointer, result
+        );
+        Some(result as *const usize)
+    }
 }
 
-pub fn resolve_static_address(input: &StaticAddressSignature) -> Option<*const usize> {
-    // TODO
-    None
+pub unsafe fn resolve_static_address(input: &StaticAddressSignature) -> Option<*const usize> {
+    let sig = parse_sig_str(input.signature.0);
+    let result = find_sig(MODULE_START, MODULE_SIZE, sig);
+
+    if result == std::ptr::null() {
+        debug!(
+            "resolve_static_address: couldn't resolve {}",
+            input.signature.0
+        );
+        None
+    } else {
+        // get the 4 bytes at input.offset bytes past the result
+        let access_offset = std::ptr::read_unaligned(result.offset(input.offset) as *const u32);
+        let mut result = result.offset(input.offset + 4 + access_offset as isize);
+
+        if input.is_pointer {
+            // dereference the pointer
+            result = std::ptr::read_unaligned(result as *const *const u8);
+        }
+
+        debug!(
+            "resolve_static_address: resolved {} (offset {}, is_pointer {}) - {:p}",
+            input.signature.0, input.offset, input.is_pointer, result
+        );
+        Some(result as *const usize)
+    }
 }
 
-pub fn resolve_member_function(input: &MemberFunctionSignature) -> Option<*const usize> {
-    // TODO
-    None
+pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> Option<*const usize> {
+    let sig = parse_sig_str(input.signature.0);
+    let result = find_sig(MODULE_START, MODULE_SIZE, sig);
+
+    if result == std::ptr::null() {
+        debug!(
+            "resolve_member_function: couldn't resolve {}",
+            input.signature.0
+        );
+        None
+    } else {
+        debug!(
+            "resolve_member_function: resolved {} - {:p}",
+            input.signature.0, result
+        );
+        Some(result as *const usize)
+    }
 }
