@@ -81,7 +81,7 @@ impl deno_core::ModuleLoader for TsModuleLoader {
     }
 }
 
-pub async fn init_core_runtime(runtime_dir: &PathBuf) -> Result<()> {
+pub(crate) async fn init_core_runtime(runtime_dir: &PathBuf) -> Result<()> {
     info!("initializing core runtime");
 
     let mut runtime = JsRuntime::new(RuntimeOptions {
