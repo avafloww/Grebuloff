@@ -6,6 +6,8 @@ import child_process from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import readline from 'readline';
+import events from 'events';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -172,6 +174,38 @@ async function checkBuildTools() {
   return true;
 }
 
+async function shouldBuildClientStructs() {
+  if (!fs.existsSync(CS_EXPORTER_BIN) || !fs.existsSync(CS_GENERATED_FILE)) {
+    return true;
+  }
+
+  // check the first line only, generated.rs is huge...
+  const rl = readline.createInterface({
+    input: fs.createReadStream(CS_GENERATED_FILE),
+    crlfDelay: Infinity,
+  });
+
+  const [line] = await events.once(rl, 'line');
+  rl.close();
+
+  // always rebuild if the rev line is missing
+  if (!line.startsWith('// rev: ')) {
+    return true;
+  }
+
+  const rev = line.substring(8);
+
+  // always rebuild if the working tree was dirty when the file was generated
+  if (rev.endsWith('-dirty')) {
+    return true;
+  }
+
+  // otherwise, only rebuild if the CS rev is different
+  const gitRev = await exec(`git describe --always`, {cwd: CS_DIR, silent: true});
+
+  return rev !== gitRev;
+}
+
 function ensureArtifacts() {
   // iterate through EXE_ARTIFACT_PATHS and ensure each one exists
   for (const [project, path] of Object.entries(EXE_ARTIFACT_PATHS)) {
@@ -319,14 +353,11 @@ if (opType === 'build') {
       await exec(`git submodule update --init --recursive`);
     }
 
-    // ensure clientstructs RustExporter is built
-    if (!fs.existsSync(CS_EXPORTER_BIN)) {
+    // ensure we have exported structs
+    if (await shouldBuildClientStructs()) {
       console.log('Building FFXIVClientStructs/RustExporter...');
       await exec(`dotnet build -c Debug`, {cwd: CS_EXPORTER_DIR});
-    }
 
-    // ensure we have exported structs
-    if (!fs.existsSync(CS_GENERATED_FILE)) {
       console.log('Running FFXIVClientStructs/RustExporter...');
       await exec(CS_EXPORTER_BIN, {cwd: CS_EXPORTER_BIN_DIR});
     }
