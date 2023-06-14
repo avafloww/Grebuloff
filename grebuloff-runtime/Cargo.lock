@@ -855,7 +855,6 @@ dependencies = [
  "rmp-serde",
  "serde",
  "serde_json",
- "sigscanner",
  "tokio",
  "vergen",
  "webview2-com",
@@ -1841,11 +1840,6 @@ checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "sigscanner"
-version = "0.2.1"
-source = "git+https://github.com/chirpxiv/sigscanner.git?branch=main#4979b2c7dded3f61b0b0e3564e6f2c37852a425e"
 
 [[package]]
 name = "siphasher"

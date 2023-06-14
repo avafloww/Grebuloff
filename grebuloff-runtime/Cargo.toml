@@ -9,7 +9,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ffxivclientstructs = { path = "../deps/FFXIVClientStructs/rust" }
-sigscanner = { git = "https://github.com/chirpxiv/sigscanner.git", branch = "main" }
 dll-syringe = { version = "0.15.2", default-features = false, features = ["payload-utils"] }
 msgbox = "0.7.0"
 log = "0.4"

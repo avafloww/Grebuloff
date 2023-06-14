@@ -1,7 +1,5 @@
 use ffxivclientstructs::{MemberFunctionSignature, StaticAddressSignature, VTableSignature};
 use log::{debug, info};
-use sigscanner::scanning::find_sig;
-use sigscanner::signatures::parse_sig_str;
 use windows::Win32::System::LibraryLoader::GetModuleHandleA;
 use windows::Win32::System::ProcessStatus::{GetModuleInformation, MODULEINFO};
 use windows::Win32::System::Threading::GetCurrentProcess;
@@ -103,4 +101,57 @@ pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> Option
         );
         Some(result as *const usize)
     }
+}
+
+// Parse sig string (ie. "E8 ?? ?? ?? ?? 8A 5F 28")
+fn parse_sig_str(sig: &str) -> Vec<Option<u8>> {
+    let split: Vec<&str> = sig.split(" ").collect();
+    split
+        .into_iter()
+        .map(|x| {
+            if x == "??" {
+                None
+            } else {
+                Some(u8::from_str_radix(x, 16).unwrap())
+            }
+        })
+        .collect()
+}
+
+unsafe fn find_sig(start_addr: *const u8, size: usize, sig: Vec<Option<u8>>) -> *const u8 {
+    // not ideal but this is an optimisation overall because accessing vectors is slow
+    let sig_bytes = sig.as_slice();
+    let sig_len = sig_bytes.len();
+
+    let mut sig_index = 0;
+    for i in 0..size {
+        let ptr = start_addr.add(i);
+
+        let sig_byte = sig_bytes[sig_index];
+        let matches = match sig_byte {
+            Some(s) => s == *ptr,
+            None => true,
+        };
+
+        if matches {
+            sig_index += 1;
+            if sig_index != sig_len {
+                continue;
+            }
+
+            let start = ptr.sub(sig_index - 1);
+            let b = *start;
+            return if b == 0xE8 || b == 0xE9 {
+                // relative call
+                let offset = std::ptr::read_unaligned(start.add(1) as *const u32);
+                start.sub(!offset as usize).add(4)
+            } else {
+                start
+            };
+        } else if sig_index > 0 {
+            sig_index = 0;
+        }
+    }
+
+    std::ptr::null()
 }
