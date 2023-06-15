@@ -2,16 +2,15 @@ mod ext;
 mod ops;
 
 use crate::runtime::ext::{get_ext_privileged, get_ext_unprivileged};
-use anyhow::{Context, Error, Result};
+use anyhow::{Error, Result};
 use deno_ast::MediaType;
 use deno_ast::ParseParams;
 use deno_ast::SourceTextInfo;
 use deno_core::{
-    futures::FutureExt, Extension, FastString, JsRuntime, ModuleSource, ModuleSourceFuture,
-    ModuleSpecifier, ResolutionKind, RuntimeOptions,
+    futures::FutureExt, JsRuntime, ModuleSource, ModuleSourceFuture, ModuleSpecifier,
+    ResolutionKind, RuntimeOptions,
 };
-use include_dir::{include_dir, Dir};
-use log::{error, info, Log};
+use log::info;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::rc::Rc;

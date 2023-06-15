@@ -32,6 +32,7 @@ const CS_EXPORTER_BIN = path.join(CS_EXPORTER_BIN_DIR, 'RustExporter.exe');
 const EXE_ARTIFACT_PATHS = {
   'injector': path.join(OUTPUT_DIR, 'grebuloff-injector.exe'),
   'runtime': path.join(OUTPUT_DIR, 'grebuloff_runtime.dll'),
+  'core': path.join(OUTPUT_DIR, 'core'),
 };
 
 // Project names (without the leading grebuloff-)

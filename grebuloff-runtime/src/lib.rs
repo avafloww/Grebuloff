@@ -13,7 +13,6 @@ use msgbox::IconType;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::thread;
-use tokio::runtime::Handle;
 use tokio::task;
 
 static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -43,10 +42,6 @@ pub fn get_load_method() -> GrebuloffLoadMethod {
     }
 
     GrebuloffLoadMethod::Native
-}
-
-fn alert(message: &str) {
-    msgbox::create("Grebuloff", message, IconType::Info).unwrap();
 }
 
 fn setup_logging(dir: &PathBuf) {

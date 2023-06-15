@@ -34,18 +34,17 @@ pub unsafe fn prepare() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub unsafe fn resolve_vtable(input: &VTableSignature) -> Option<*const usize> {
-    let result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
+pub unsafe fn resolve_vtable(input: &VTableSignature) -> *const u8 {
+    let mut result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
 
     if result == std::ptr::null() {
         debug!(
             "resolve_vtable: couldn't resolve {}",
             input.signature.string
         );
-        None
     } else {
         // get the 4 bytes at input.offset bytes past the result
-        let mut result = result.offset(input.offset);
+        result = result.offset(input.offset);
 
         if input.is_pointer {
             // dereference the pointer
@@ -56,23 +55,23 @@ pub unsafe fn resolve_vtable(input: &VTableSignature) -> Option<*const usize> {
             "resolve_vtable: resolved {} (offset {}, is_pointer {}) - {:p}",
             input.signature.string, input.offset, input.is_pointer, result
         );
-        Some(result as *const usize)
     }
+
+    result
 }
 
-pub unsafe fn resolve_static_address(input: &StaticAddressSignature) -> Option<*const usize> {
-    let result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
+pub unsafe fn resolve_static_address(input: &StaticAddressSignature) -> *const u8 {
+    let mut result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
 
     if result == std::ptr::null() {
         debug!(
             "resolve_static_address: couldn't resolve {}",
             input.signature.string
         );
-        None
     } else {
         // get the 4 bytes at input.offset bytes past the result
         let access_offset = std::ptr::read_unaligned(result.offset(input.offset) as *const u32);
-        let mut result = result.offset(input.offset + 4 + access_offset as isize);
+        result = result.offset(input.offset + 4 + access_offset as isize);
 
         if input.is_pointer {
             // dereference the pointer
@@ -83,11 +82,12 @@ pub unsafe fn resolve_static_address(input: &StaticAddressSignature) -> Option<*
             "resolve_static_address: resolved {} (offset {}, is_pointer {}) - {:p}",
             input.signature.string, input.offset, input.is_pointer, result
         );
-        Some(result as *const usize)
     }
+
+    result
 }
 
-pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> Option<*const usize> {
+pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> *const u8 {
     let result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
 
     if result == std::ptr::null() {
@@ -95,14 +95,14 @@ pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> Option
             "resolve_member_function: couldn't resolve {}",
             input.signature.string
         );
-        None
     } else {
         debug!(
             "resolve_member_function: resolved {} - {:p}",
             input.signature.string, result
         );
-        Some(result as *const usize)
     }
+
+    result
 }
 
 unsafe fn find_sig(start_addr: *const u8, size: usize, sig: &Signature) -> *const u8 {

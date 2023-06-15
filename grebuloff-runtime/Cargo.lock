@@ -395,17 +395,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "deno_ast-dynamic"
-version = "0.1.0"
-dependencies = [
- "deno_ast",
-]
-
-[[package]]
 name = "deno_core"
-version = "0.190.0"
+version = "0.189.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2874134a910db7ce562244ea1ed1c5efec42fdd7613b34025c2fc46505deb5db"
+checksum = "c6c90f12c2eeb8b534e8bf762c7796661c2cb6fd69b7198da25b2c70d0849ed4"
 dependencies = [
  "anyhow",
  "bytes",
@@ -428,13 +421,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deno_core-dynamic"
-version = "0.1.0"
-dependencies = [
- "deno_core",
-]
-
-[[package]]
 name = "deno_media_type"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -447,9 +433,9 @@ dependencies = [
 
 [[package]]
 name = "deno_ops"
-version = "0.68.0"
+version = "0.67.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06fcc21a49a44b972f54ec5f300e1e52fb386688f59fbf1734e47a69328338b8"
+checksum = "5db17196d5f93d249e9c8aae315d9f9e518091284c6ce0d85c13a4b1fb032676"
 dependencies = [
  "lazy-regex",
  "once_cell",
@@ -541,6 +527,7 @@ name = "ffxivclientstructs"
 version = "0.0.0"
 dependencies = [
  "ffxivclientstructs_macros",
+ "log",
  "tokio",
 ]
 
@@ -869,9 +856,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "deno_ast-dynamic",
- "deno_core-dynamic",
- "deno_ops",
+ "deno_ast",
+ "deno_core",
  "dll-syringe",
  "fern",
  "ffxivclientstructs",
@@ -884,7 +870,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "vergen",
- "webview2-com-dynamic",
+ "webview2-com",
  "windows",
 ]
 
@@ -1830,9 +1816,9 @@ dependencies = [
 
 [[package]]
 name = "serde_v8"
-version = "0.101.0"
+version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "613ea53a4a3a9abe264072a12989a67cf8988619e189fd5d1220dbe18e366d04"
+checksum = "1e66031ca2e6c4b682cf0377633992f3c0ec3fda65701ff14fee99d6ff5eeeeb"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2763,13 +2749,6 @@ dependencies = [
  "windows",
  "windows-implement",
  "windows-interface",
-]
-
-[[package]]
-name = "webview2-com-dynamic"
-version = "0.1.0"
-dependencies = [
- "webview2-com",
 ]
 
 [[package]]
