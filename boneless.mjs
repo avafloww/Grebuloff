@@ -152,7 +152,12 @@ async function checkBuildTools() {
     rustcVersion = rustcVersion.split(' ')[1];
     console.log(`Found rustc ${rustcVersion}`);
     if (!checkMinVersion(rustcVersion, RUST_MIN_VERSION)) {
-      console.error(`rustc ${RUST_MIN_VERSION} or higher is required (found ${rustcVersion}). Please install the latest Rust toolchain.`);
+      console.error(`Rust nightly ${RUST_MIN_VERSION} or higher is required (found ${rustcVersion}). Please install the latest Rust nightly toolchain.`);
+      return false;
+    }
+
+    if (!rustcVersion.endsWith('-nightly')) {
+      console.error(`Rust nightly is required. Please switch to a nightly toolchain.`);
       return false;
     }
   } catch (e) {
