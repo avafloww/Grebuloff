@@ -1,7 +1,8 @@
+use anyhow::bail;
 use ffxivclientstructs::{
     MemberFunctionSignature, Signature, StaticAddressSignature, VTableSignature,
 };
-use log::{debug, info};
+use log::{debug, info, warn};
 use windows::Win32::System::LibraryLoader::GetModuleHandleA;
 use windows::Win32::System::ProcessStatus::{GetModuleInformation, MODULEINFO};
 use windows::Win32::System::Threading::GetCurrentProcess;
@@ -20,7 +21,7 @@ pub unsafe fn prepare() -> anyhow::Result<()> {
     );
 
     if !result.as_bool() {
-        return Err(anyhow::anyhow!("GetModuleInformation failed"));
+        bail!("GetModuleInformation failed");
     }
 
     info!(
@@ -38,7 +39,7 @@ pub unsafe fn resolve_vtable(input: &VTableSignature) -> *const u8 {
     let mut result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
 
     if result == std::ptr::null() {
-        debug!(
+        warn!(
             "resolve_vtable: couldn't resolve {}",
             input.signature.string
         );
@@ -65,7 +66,7 @@ pub unsafe fn resolve_static_address(input: &StaticAddressSignature) -> *const u
     let mut result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
 
     if result == std::ptr::null() {
-        debug!(
+        warn!(
             "resolve_static_address: couldn't resolve {}",
             input.signature.string
         );
@@ -92,7 +93,7 @@ pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> *const
     let result = find_sig(MODULE_START, MODULE_SIZE, &input.signature);
 
     if result == std::ptr::null() {
-        debug!(
+        warn!(
             "resolve_member_function: couldn't resolve {}",
             input.signature.string
         );
