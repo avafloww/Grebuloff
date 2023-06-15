@@ -1,5 +1,5 @@
-use deno_core::Extension;
 use crate::runtime::ops::*;
+use deno_core::Extension;
 
 // Two main extensions:
 // grebuloff_unprivileged: the common stuff, like logging facilities
@@ -10,15 +10,12 @@ pub(crate) fn get_ext_unprivileged() -> Extension {
         // overwrite the Deno.core.print function with one that goes to the log
         .middleware(|op| match op.name {
             "op_print" => op_print::decl(),
-            _ => op
+            _ => op,
         })
-        .ops(vec![
-            op_log::decl(),
-        ])
+        .ops(vec![op_log::decl()])
         .build()
 }
 
 pub(crate) fn get_ext_privileged() -> Extension {
-    Extension::builder("grebuloff_privileged")
-        .build()
+    Extension::builder("grebuloff_privileged").build()
 }

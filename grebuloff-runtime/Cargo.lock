@@ -395,10 +395,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "deno_ast-dynamic"
+version = "0.1.0"
+dependencies = [
+ "deno_ast",
+]
+
+[[package]]
 name = "deno_core"
-version = "0.189.0"
+version = "0.190.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6c90f12c2eeb8b534e8bf762c7796661c2cb6fd69b7198da25b2c70d0849ed4"
+checksum = "2874134a910db7ce562244ea1ed1c5efec42fdd7613b34025c2fc46505deb5db"
 dependencies = [
  "anyhow",
  "bytes",
@@ -421,6 +428,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deno_core-dynamic"
+version = "0.1.0"
+dependencies = [
+ "deno_core",
+]
+
+[[package]]
 name = "deno_media_type"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -433,9 +447,9 @@ dependencies = [
 
 [[package]]
 name = "deno_ops"
-version = "0.67.0"
+version = "0.68.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5db17196d5f93d249e9c8aae315d9f9e518091284c6ce0d85c13a4b1fb032676"
+checksum = "06fcc21a49a44b972f54ec5f300e1e52fb386688f59fbf1734e47a69328338b8"
 dependencies = [
  "lazy-regex",
  "once_cell",
@@ -525,6 +539,18 @@ dependencies = [
 [[package]]
 name = "ffxivclientstructs"
 version = "0.0.0"
+dependencies = [
+ "ffxivclientstructs_macros",
+ "tokio",
+]
+
+[[package]]
+name = "ffxivclientstructs_macros"
+version = "0.1.0"
+dependencies = [
+ "litrs",
+ "quote",
+]
 
 [[package]]
 name = "field-offset"
@@ -843,8 +869,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "deno_ast",
- "deno_core",
+ "deno_ast-dynamic",
+ "deno_core-dynamic",
+ "deno_ops",
  "dll-syringe",
  "fern",
  "ffxivclientstructs",
@@ -857,7 +884,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "vergen",
- "webview2-com",
+ "webview2-com-dynamic",
  "windows",
 ]
 
@@ -1169,6 +1196,15 @@ name = "libc"
 version = "0.2.146"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f92be4933c13fd498862a9e02a3055f8a8d9c039ce33db97306fd5a6caa7f29b"
+
+[[package]]
+name = "litrs"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f17c3668f3cc1132437cdadc93dab05e52d592f06948d3f64828430c36e4a70"
+dependencies = [
+ "proc-macro2",
+]
 
 [[package]]
 name = "lock_api"
@@ -1794,9 +1830,9 @@ dependencies = [
 
 [[package]]
 name = "serde_v8"
-version = "0.100.0"
+version = "0.101.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e66031ca2e6c4b682cf0377633992f3c0ec3fda65701ff14fee99d6ff5eeeeb"
+checksum = "613ea53a4a3a9abe264072a12989a67cf8988619e189fd5d1220dbe18e366d04"
 dependencies = [
  "bytes",
  "derive_more",
@@ -2727,6 +2763,13 @@ dependencies = [
  "windows",
  "windows-implement",
  "windows-interface",
+]
+
+[[package]]
+name = "webview2-com-dynamic"
+version = "0.1.0"
+dependencies = [
+ "webview2-com",
 ]
 
 [[package]]

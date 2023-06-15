@@ -23,9 +23,9 @@ const OUTPUT_DIR = path.join(__dirname, 'build');
 
 const CS_DIR = path.join(__dirname, 'deps', 'FFXIVClientStructs');
 const CS_RUST_DIR = path.join(CS_DIR, 'rust');
-const CS_GENERATED_FILE = path.join(CS_DIR, 'rust', 'src', 'generated.rs');
+const CS_GENERATED_FILE = path.join(CS_RUST_DIR, 'lib', 'src', 'generated.rs');
 
-const CS_EXPORTER_DIR = path.join(CS_DIR, 'RustExporter');
+const CS_EXPORTER_DIR = path.join(CS_RUST_DIR, 'exporter');
 const CS_EXPORTER_BIN_DIR = path.join(CS_EXPORTER_DIR, 'bin', 'Debug', 'net7.0');
 const CS_EXPORTER_BIN = path.join(CS_EXPORTER_BIN_DIR, 'RustExporter.exe');
 

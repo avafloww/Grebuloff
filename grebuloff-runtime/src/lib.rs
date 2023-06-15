@@ -1,12 +1,12 @@
 mod dalamud;
 mod resolvers;
 mod runtime;
-mod webview;
+// mod webview;
 
 use crate::dalamud::DalamudPipe;
 use crate::resolvers::init_resolvers;
 use crate::runtime::init_core_runtime;
-use crate::webview::WebView;
+// use crate::webview::WebView;
 use anyhow::Result;
 use log::{error, info};
 use msgbox::IconType;
@@ -31,7 +31,7 @@ dll_syringe::payload_procedure! {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GrebuloffLoadMethod {
     Native,
     Dalamud,
@@ -144,7 +144,9 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
 
     // handle anything that needs to be loaded sync first
     // resolve clientstructs
-    unsafe { init_resolvers(get_load_method()) }.expect("failed to init resolvers");
+    unsafe { init_resolvers(get_load_method()) }
+        .await
+        .expect("failed to init resolvers");
 
     // core js runtime
     init_core_runtime(&runtime_dir)
