@@ -44,7 +44,8 @@ pub unsafe fn resolve_vtable(input: &VTableSignature) -> *const u8 {
         );
     } else {
         // get the 4 bytes at input.offset bytes past the result
-        result = result.offset(input.offset);
+        let access_offset = std::ptr::read_unaligned(result.offset(input.offset) as *const u32);
+        result = result.offset(input.offset + 4 + access_offset as isize);
 
         if input.is_pointer {
             // dereference the pointer
@@ -108,37 +109,30 @@ pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> *const
 unsafe fn find_sig(start_addr: *const u8, size: usize, sig: &Signature) -> *const u8 {
     let sig_len = sig.bytes.len();
 
-    let mut sig_index = 0;
-    for i in 0..size {
-        let ptr = start_addr.add(i);
+    // we use two cursors here to handle edge cases
+    // first, we iterate over the entire memory region
+    'prog: for pi in 0..size {
+        let prog_cursor = start_addr.add(pi);
 
-        let sig_byte = sig.bytes[sig_index];
-        let sig_mask = sig.mask[sig_index];
+        // next, we attempt to match the entire signature from the program cursor
+        for si in 0..sig_len {
+            let sig_cursor = prog_cursor.add(si);
 
-        let matches = if sig_mask == 0 {
-            true
-        } else {
-            sig_byte == *ptr
-        };
-
-        if matches {
-            sig_index += 1;
-            if sig_index != sig_len {
-                continue;
+            let valid = sig.mask[si] == 0x00 || sig.bytes[si] == *sig_cursor;
+            if !valid {
+                continue 'prog;
             }
-
-            let start = ptr.sub(sig_index - 1);
-            let b = *start;
-            return if b == 0xE8 || b == 0xE9 {
-                // relative call
-                let offset = std::ptr::read_unaligned(start.add(1) as *const u32);
-                start.sub(!offset as usize).add(4)
-            } else {
-                start
-            };
-        } else if sig_index > 0 {
-            sig_index = 0;
         }
+
+        // if we get here, we found the signature
+        let b = *prog_cursor;
+        return if b == 0xE8 || b == 0xE9 {
+            // relative call
+            let offset = std::ptr::read_unaligned(prog_cursor.add(1) as *const i32);
+            prog_cursor.add(5).offset(offset as isize)
+        } else {
+            prog_cursor
+        };
     }
 
     std::ptr::null()
