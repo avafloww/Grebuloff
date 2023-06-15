@@ -209,7 +209,7 @@ async function shouldBuildClientStructs() {
   // otherwise, only rebuild if the CS rev is different
   const gitRev = await exec(`git describe --always`, {cwd: CS_DIR, silent: true});
 
-  return rev !== gitRev;
+  return rev.trim() !== gitRev.trim();
 }
 
 function ensureArtifacts() {
