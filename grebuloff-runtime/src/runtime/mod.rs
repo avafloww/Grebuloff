@@ -10,12 +10,14 @@ use deno_core::{
     futures::FutureExt, JsRuntime, ModuleSource, ModuleSourceFuture, ModuleSpecifier,
     ResolutionKind, RuntimeOptions,
 };
-use log::info;
+use log::{info, trace};
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::rc::Rc;
 
 struct TsModuleLoader;
+
+const FILE_EXTENSIONS: [&str; 5] = ["ts", "tsx", "d.ts", "js", "jsx"];
 
 impl deno_core::ModuleLoader for TsModuleLoader {
     fn resolve(
@@ -35,8 +37,39 @@ impl deno_core::ModuleLoader for TsModuleLoader {
     ) -> Pin<Box<ModuleSourceFuture>> {
         let module_specifier = module_specifier.clone();
         async move {
-            let path = module_specifier.to_file_path().unwrap();
+            let mut path = module_specifier.to_file_path().unwrap();
 
+            if !path.is_file() {
+                // If this is a js/jsx file reference, try to find the file with a ts/tsx extension.
+                // This is done for runtime compilation of TypeScript files.
+                match path.extension() {
+                    Some(ext) if ext == "js" => {
+                        let path_with_ext = path.with_extension("ts");
+                        if path_with_ext.is_file() {
+                            path = path_with_ext;
+                        }
+                    }
+                    Some(ext) if ext == "jsx" => {
+                        let path_with_ext = path.with_extension("tsx");
+                        if path_with_ext.is_file() {
+                            path = path_with_ext;
+                        }
+                    }
+                    _ if path.is_dir() => {
+                        // If this is a directory, try to find an index file.
+                        for ext in FILE_EXTENSIONS.iter() {
+                            let path_with_ext = path.join(format!("index.{}", ext));
+                            if path_with_ext.is_file() {
+                                path = path_with_ext;
+                                break;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            trace!("TsModuleLoader: resolve: {:?}", path);
             // Determine what the MediaType is (this is done based on the file
             // extension) and whether transpiling is required.
             let media_type = MediaType::from_path(&path);
@@ -53,12 +86,13 @@ impl deno_core::ModuleLoader for TsModuleLoader {
                 | MediaType::Dcts
                 | MediaType::Tsx => (deno_core::ModuleType::JavaScript, true),
                 MediaType::Json => (deno_core::ModuleType::Json, false),
-                _ => panic!("Unknown extension {:?}", path.extension()),
+                _ => panic!("unknown media type for path: {:?}", path),
             };
 
             // Read the file, transpile if necessary.
             let code = std::fs::read_to_string(&path)?;
             let code = if should_transpile {
+                trace!("TsModuleLoader: transpile: {:?}", path);
                 let parsed = deno_ast::parse_module(ParseParams {
                     specifier: module_specifier.to_string(),
                     text_info: SourceTextInfo::from_string(code),
@@ -73,6 +107,7 @@ impl deno_core::ModuleLoader for TsModuleLoader {
             };
 
             // Load and return module.
+            trace!("TsModuleLoader: load: {:?}", path);
             let module = ModuleSource::new(module_type, code.into(), &module_specifier);
             Ok(module)
         }
@@ -90,7 +125,7 @@ pub(crate) async fn init_core_runtime(runtime_dir: &PathBuf) -> Result<()> {
         ..Default::default()
     });
 
-    let main_module = deno_core::resolve_path("./core/main.js", &runtime_dir)?;
+    let main_module = deno_core::resolve_path("./core/boot.js", &runtime_dir)?;
 
     info!("main module: {:?}", main_module);
 
