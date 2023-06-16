@@ -279,7 +279,7 @@ fn main() {
     let syringe = Syringe::for_process(target);
 
     let current_exe = std::env::current_exe().unwrap();
-    let loader_path = current_exe.join("../grebuloff_runtime.dll");
+    let llrt_path = current_exe.join("../grebuloff_llrt.dll");
     let grebuloff_path = current_exe.join("../");
 
     unsafe {
@@ -298,7 +298,7 @@ fn main() {
     }
 
     println!("injecting...");
-    let injected_payload = syringe.inject(loader_path).unwrap();
+    let injected_payload = syringe.inject(llrt_path).unwrap();
 
     println!("calling entrypoint...");
     let remote_load =

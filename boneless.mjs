@@ -31,18 +31,20 @@ const CS_EXPORTER_BIN = path.join(CS_EXPORTER_BIN_DIR, 'RustExporter.exe');
 
 const EXE_ARTIFACT_PATHS = {
   'injector': path.join(OUTPUT_DIR, 'grebuloff-injector.exe'),
-  'runtime': path.join(OUTPUT_DIR, 'grebuloff_runtime.dll'),
-  'core': path.join(OUTPUT_DIR, 'core'),
+  'llrt': path.join(OUTPUT_DIR, 'grebuloff_llrt.dll'),
+  'hlrt': path.join(OUTPUT_DIR, 'hlrt'),
+  'libhlrt': path.join(OUTPUT_DIR, 'libhlrt'),
 };
 
 // Project names (without the leading grebuloff-)
 const RUST_PROJECTS = [
   'injector',
-  'runtime',
+  'llrt',
 ];
 
 const JS_PROJECTS = [
-  'core',
+  'libhlrt',
+  'hlrt',
   'ui',
 ];
 

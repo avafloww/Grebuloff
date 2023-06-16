@@ -44,10 +44,11 @@ to make the Next Big Plugin, or an end-user looking for a wide ecosystem of addo
 | Component            | Language   | Description                                                                                          |
 |----------------------|------------|------------------------------------------------------------------------------------------------------|
 | `grebuloff-injector` | Rust       | Injects the runtime into the game process.                                                           |
-| `grebuloff-runtime`  | Rust       | The entrypoint of Grebuloff. Manages V8 isolates and bridges them to the game.                       |
-| `grebuloff-dalamud`  | C#         | A Dalamud helper plugin that allows Grebuloff and Dalamud to run simultaneously.                     |
-| `grebuloff-core`     | TypeScript | The core library for the Grebuloff runtime. Runs in a "privileged" V8 isolate.                       |
+| `grebuloff-llrt`     | Rust       | Low-level core runtime, injected by the injector. Handles game communications & bootstraps HLRT.     |
+| `grebuloff-hlrt`     | TypeScript | High-level core runtime that runs in the privileged isolate.                                         |
+| `grebuloff-hlrt-lib` | TypeScript | Present in every isolate, and used to build the V8 snapshot.                                         |
 | `grebuloff-ui`       | TypeScript | Provides UI services for Grebuloff and plugins. Written in React, and runs in the WebView2 instance. |
+| `grebuloff-dalamud`  | C#         | A Dalamud helper plugin that allows Grebuloff and Dalamud to run simultaneously.                     |
 
 ## Credits & Acknowledgements
 
@@ -65,6 +66,8 @@ Thanks to:
   game's internals
 - The community developers at [goat place](https://goat.place), also for their extensive research into the
   game's internals, as well as for entertaining my constant memery
+- [Deno](https://github.com/denoland/deno) and [MiniV8](https://github.com/SkylerLipthay/mini-v8) for
+  providing excellent examples and code to embed V8 in Rust
 - Square Enix, for creating the critically acclaimed game that we all know and love
 
 ## License
