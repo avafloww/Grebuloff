@@ -46,7 +46,7 @@ to make the Next Big Plugin, or an end-user looking for a wide ecosystem of addo
 | `grebuloff-injector` | Rust       | Injects the runtime into the game process.                                                           |
 | `grebuloff-llrt`     | Rust       | Low-level core runtime, injected by the injector. Handles game communications & bootstraps HLRT.     |
 | `grebuloff-hlrt`     | TypeScript | High-level core runtime that runs in the privileged isolate.                                         |
-| `grebuloff-hlrt-lib` | TypeScript | Present in every isolate, and used to build the V8 snapshot.                                         |
+| `grebuloff-libhlrt`  | TypeScript | Present in every isolate, and used to build the V8 snapshot.                                         |
 | `grebuloff-ui`       | TypeScript | Provides UI services for Grebuloff and plugins. Written in React, and runs in the WebView2 instance. |
 | `grebuloff-dalamud`  | C#         | A Dalamud helper plugin that allows Grebuloff and Dalamud to run simultaneously.                     |
 
