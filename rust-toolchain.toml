@@ -1,0 +1,4 @@
+[toolchain]
+# Newer nightlies break V8 build currently - will be fixed in v8@0.74.0
+# I'd love to use stable here, but dll-syringe requires nightly features
+channel = "nightly-2023-06-02"

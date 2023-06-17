@@ -6,8 +6,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "clean": "rimraf dist ../build/libhlrt/",
-    "build": "tsc && mkdirp ../build/libhlrt && ncp package.json ../build/libhlrt/package.json && ncp dist ../build/libhlrt/dist"
+    "clean": "rimraf dist ../../build/libhlrt/",
+    "build": "tsc && mkdirp ../../build/libhlrt && ncp package.json ../../build/libhlrt/package.json && ncp dist ../../build/libhlrt/dist"
   },
   "devDependencies": {
     "mkdirp": "^3.0.1",

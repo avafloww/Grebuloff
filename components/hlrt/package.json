@@ -1,14 +1,14 @@
 {
-  "name": "grebuloff-hlrt",
+  "name": "@grebuloff/hlrt",
   "description": "Grebuloff high-level runtime core",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "clean": "rimraf ../build/hlrt/",
+    "clean": "rimraf ../../build/hlrt/",
     "build": "tsc"
   },
   "devDependencies": {
-    "@types/grebuloff": "file:../grebuloff-libhlrt",
+    "@types/grebuloff": "file:../libhlrt",
     "rimraf": "^5.0.1",
     "typescript": "^5.1.3"
   }

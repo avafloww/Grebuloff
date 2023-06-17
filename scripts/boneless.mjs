@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import readline from 'readline';
 import events from 'events';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.resolve(path.join(path.dirname(fileURLToPath(import.meta.url)), '..'));
 
 // Versions
 const DOTNET_MIN_VERSION = '7';
@@ -19,6 +19,7 @@ const RUST_MIN_VERSION = '1.65';
 const USER_HOME = process.env['HOME'] || process.env['USERPROFILE'] || '.';
 const RC_FILE = path.join(USER_HOME, '.bonelessrc.json');
 
+const COMPONENTS_DIR = path.join(__dirname, 'components');
 const OUTPUT_DIR = path.join(__dirname, 'build');
 
 const CS_DIR = path.join(__dirname, 'deps', 'FFXIVClientStructs');
@@ -29,30 +30,41 @@ const CS_EXPORTER_DIR = path.join(CS_RUST_DIR, 'exporter');
 const CS_EXPORTER_BIN_DIR = path.join(CS_EXPORTER_DIR, 'bin', 'Debug', 'net7.0');
 const CS_EXPORTER_BIN = path.join(CS_EXPORTER_BIN_DIR, 'RustExporter.exe');
 
-const EXE_ARTIFACT_PATHS = {
-  'injector': path.join(OUTPUT_DIR, 'grebuloff-injector.exe'),
-  'llrt': path.join(OUTPUT_DIR, 'grebuloff_llrt.dll'),
-  'hlrt': path.join(OUTPUT_DIR, 'hlrt'),
-  'libhlrt': path.join(OUTPUT_DIR, 'libhlrt'),
+// Project info
+const PROJECTS = {
+  injector: {
+    type: 'rust',
+    dir: path.join(COMPONENTS_DIR, 'injector'),
+    artifact: path.join(OUTPUT_DIR, 'grebuloff-injector.exe'),
+    required: true,
+  },
+  llrt: {
+    type: 'rust',
+    dir: path.join(COMPONENTS_DIR, 'llrt'),
+    artifact: path.join(OUTPUT_DIR, 'grebuloff_llrt.dll'),
+    required: true,
+  },
+  libhlrt: {
+    type: 'js',
+    dir: path.join(COMPONENTS_DIR, 'libhlrt'),
+    artifact: path.join(OUTPUT_DIR, 'libhlrt'),
+    required: true,
+  },
+  hlrt: {
+    type: 'js',
+    dir: path.join(COMPONENTS_DIR, 'hlrt'),
+    artifact: path.join(OUTPUT_DIR, 'hlrt'),
+    required: true,
+  },
+  ui: {
+    type: 'js',
+    dir: path.join(COMPONENTS_DIR, 'ui'),
+  },
+  dalamud: {
+    type: 'dotnet',
+    dir: path.join(COMPONENTS_DIR, 'dalamud'),
+  }
 };
-
-// Project names (without the leading grebuloff-)
-const RUST_PROJECTS = [
-  'injector',
-  'llrt',
-];
-
-const JS_PROJECTS = [
-  'libhlrt',
-  'hlrt',
-  'ui',
-];
-
-const DOTNET_PROJECTS = [
-  'dalamud',
-];
-
-const ALL_PROJECTS = RUST_PROJECTS.concat(JS_PROJECTS).concat(DOTNET_PROJECTS);
 
 //
 // Utility functions
@@ -63,7 +75,7 @@ async function exec(cmd, extraOpts = {}) {
       console.log(`> ${cmd}`);
     }
 
-    let child = child_process.spawn(cmd, Object.assign({shell: true}, extraOpts));
+    let child = child_process.spawn(cmd, Object.assign({ shell: true }, extraOpts));
 
     let output = '';
 
@@ -90,16 +102,33 @@ async function exec(cmd, extraOpts = {}) {
   });
 }
 
-async function execFor(project, cmd, extraOpts = {}) {
-  let projects = project;
-  if (typeof project === 'string') {
-    projects = [project];
+async function withProjects(fn, projects = Object.keys(PROJECTS)) {
+  if (typeof projects === 'string') {
+    projects = [projects];
   }
 
+  let ret = [];
   for (const p of projects) {
-    const projectDir = path.join(__dirname, `grebuloff-${p}`);
-    await exec(cmd, Object.assign({cwd: projectDir}, extraOpts));
+    const meta = PROJECTS[p];
+    let pret = fn(p, meta);
+    if (pret !== undefined) {
+      if (pret instanceof Promise) {
+        await pret;
+      }
+
+      if (pret !== undefined) {
+        ret.push(pret);
+      }
+    }
   }
+
+  return ret;
+}
+
+async function execFor(project, cmd, extraOpts = {}) {
+  await withProjects(async (name, meta) => {
+    await exec(cmd, Object.assign({ cwd: meta.dir }, extraOpts));
+  }, project);
 }
 
 async function copyArtifact(file) {
@@ -141,16 +170,18 @@ function checkMinVersion(version, minVersion) {
 }
 
 async function checkBuildTools() {
+  // cargo
   try {
-    await exec(`cargo --version`, {silent: true});
+    await exec(`cargo --version`, { silent: true });
   } catch (e) {
     console.log(e);
     console.error('cargo not found. Please ensure Rust is installed and cargo is in your path.');
     return false;
   }
 
+  // rustc
   try {
-    let rustcVersion = await exec(`rustc --version`, {silent: true});
+    let rustcVersion = await exec(`rustc --version`, { silent: true });
     rustcVersion = rustcVersion.split(' ')[1];
     console.log(`Found rustc ${rustcVersion}`);
     if (!checkMinVersion(rustcVersion, RUST_MIN_VERSION)) {
@@ -167,8 +198,9 @@ async function checkBuildTools() {
     return false;
   }
 
+  // .NET
   try {
-    const dotnetVersion = await exec(`dotnet --version`, {silent: true});
+    const dotnetVersion = await exec(`dotnet --version`, { silent: true });
     console.log(`Found .NET ${dotnetVersion}`);
     if (!checkMinVersion(dotnetVersion, DOTNET_MIN_VERSION)) {
       console.error(`.NET 7 or higher is required (found ${dotnetVersion}). Please install the latest .NET SDK.`);
@@ -176,6 +208,14 @@ async function checkBuildTools() {
     }
   } catch (e) {
     console.error(`.NET 7 or higher is required. Please install the latest .NET SDK.`);
+    return false;
+  }
+
+  // check for pnpm
+  try {
+    await exec(`pnpm --version`, { silent: true });
+  } catch (e) {
+    console.error('pnpm not found. Please install pnpm.');
     return false;
   }
 
@@ -209,22 +249,27 @@ async function shouldBuildClientStructs() {
   }
 
   // otherwise, only rebuild if the CS rev is different
-  const gitRev = await exec(`git describe --always`, {cwd: CS_DIR, silent: true});
+  const gitRev = await exec(`git describe --always`, { cwd: CS_DIR, silent: true });
 
   return rev.trim() !== gitRev.trim();
 }
 
-function ensureArtifacts() {
-  // iterate through EXE_ARTIFACT_PATHS and ensure each one exists
-  for (const [project, path] of Object.entries(EXE_ARTIFACT_PATHS)) {
-    if (!fs.existsSync(path)) {
+async function ensureArtifacts() {
+  const result = await withProjects((name, meta) => {
+    if (!meta.required || !meta.artifact) {
+      return true;
+    }
+
+    if (!fs.existsSync(meta.artifact)) {
       console.error(`${project} artifact not found. Please execute:`);
       console.error(`  boneless build ${project}`);
       return false;
     }
-  }
 
-  return true;
+    return true;
+  });
+
+  return result.filter(x => !x).length === 0;
 }
 
 function showHelp() {
@@ -241,10 +286,10 @@ function showHelp() {
   console.log('  rebuild\tClean and rebuild the project');
   console.log('Targets for build tasks:');
   console.log('  all\t\tBuild everything (default)');
-  for (const project of ALL_PROJECTS) {
-    const tabs = project.length < 7 ? '\t\t' : '\t';
-    console.log(`  ${project}${tabs}Build grebuloff-${project}`);
-  }
+  withProjects((name, meta) => {
+    const tabs = name.length < 7 ? '\t\t' : '\t';
+    console.log(`  ${name}${tabs}Build ${project}`);
+  });
   console.log();
   console.log('Run usage:\tboneless <run task> [options]');
   console.log('Run tasks:');
@@ -309,7 +354,7 @@ if (opType === 'build') {
     const target = args[i].toLowerCase();
 
     if (target === 'all') {
-      targets = ALL_PROJECTS;
+      targets = PROJECTS.keys();
       break;
     }
 
@@ -317,7 +362,7 @@ if (opType === 'build') {
       continue;
     }
 
-    if (!ALL_PROJECTS.includes(target)) {
+    if (!(target in PROJECTS)) {
       console.error(`Unknown target ${target}`);
       showHelp();
       process.exit(1);
@@ -327,7 +372,12 @@ if (opType === 'build') {
   }
 
   if (targets.length === 0) {
-    targets = ALL_PROJECTS;
+    // collect `required` targets
+    withProjects((name, meta) => {
+      if (meta.required) {
+        targets.push(name);
+      }
+    })
   }
 
   //
@@ -337,14 +387,19 @@ if (opType === 'build') {
     console.log('Cleaning build artifacts...');
 
     if (fs.existsSync(OUTPUT_DIR)) {
-      fs.rmSync(OUTPUT_DIR, {recursive: true});
+      fs.rmSync(OUTPUT_DIR, { recursive: true });
     }
 
-    await execFor(JS_PROJECTS, 'npm run clean');
-    await execFor(RUST_PROJECTS, 'cargo clean');
+    await withProjects(async (name, meta) => {
+      if (meta.type === 'js') {
+        await exec(`npm run clean`, { cwd: meta.dir });
+      } else if (meta.type === 'rust') {
+        await exec(`cargo clean`, { cwd: meta.dir });
+      }
+    });
 
-    await exec(`cargo clean`, {cwd: CS_RUST_DIR});
-    await exec(`dotnet clean`, {cwd: CS_EXPORTER_DIR});
+    await exec(`cargo clean`, { cwd: CS_RUST_DIR });
+    await exec(`dotnet clean`, { cwd: CS_EXPORTER_DIR });
 
     if (fs.existsSync(CS_GENERATED_FILE)) {
       fs.unlinkSync(CS_GENERATED_FILE);
@@ -364,30 +419,34 @@ if (opType === 'build') {
     // ensure we have exported structs
     if (await shouldBuildClientStructs()) {
       console.log('Building FFXIVClientStructs/RustExporter...');
-      await exec(`dotnet build -c Debug`, {cwd: CS_EXPORTER_DIR});
+      await exec(`dotnet build -c Debug`, { cwd: CS_EXPORTER_DIR });
 
       console.log('Running FFXIVClientStructs/RustExporter...');
-      await exec(CS_EXPORTER_BIN, {cwd: CS_EXPORTER_BIN_DIR});
+      await exec(CS_EXPORTER_BIN, { cwd: CS_EXPORTER_BIN_DIR });
     }
 
     // build components
-    for (const target of targets) {
-      if (RUST_PROJECTS.includes(target)) {
-        console.log(`Building Rust project: ${target}...`);
-        await execFor(target, 'cargo build');
-        await copyArtifact(path.join(`grebuloff-${target}`, 'target', 'debug', 'grebuloff*'));
-      } else if (JS_PROJECTS.includes(target)) {
-        console.log(`Building JS project: ${target}...`);
-        await execFor(target, 'npm install && npm run build');
-      } else if (DOTNET_PROJECTS.includes(target)) {
-        console.log(`Building .NET project: ${target}...`);
-        await execFor(target, 'dotnet build');
-        // todo: copy artifacts
-      } else {
-        console.error(`Not sure how to handle target ${target}!`);
-        process.exit(420);
+    withProjects(async (name, meta) => {
+      switch (meta.type) {
+        case 'js':
+          console.log(`Building JS project: ${name}...`);
+          await execFor(name, 'pnpm install && pnpm run build');
+          break;
+        case 'rust':
+          console.log(`Building Rust project: ${name}...`);
+          await execFor(name, 'cargo build');
+          await copyArtifact(path.join('target', 'debug', 'grebuloff*'));
+          break;
+        case 'dotnet':
+          console.log(`Building .NET project: ${name}...`);
+          await execFor(name, 'dotnet build');
+          // todo: copy artifacts
+          break;
+        default:
+          console.error(`Unknown project type ${meta.type} for ${name}`);
+          process.exit(420);
       }
-    }
+    }, targets);
   }
 } else if (opType === 'run') {
   if (operation === 'set-path') {
@@ -432,19 +491,19 @@ if (opType === 'build') {
     }
 
     // ensure the injector and runtime are built
-    if (!ensureArtifacts()) {
+    if (!await ensureArtifacts()) {
       process.exit(4);
     }
 
     // launch the injector
-    await exec(`${EXE_ARTIFACT_PATHS.injector} launch --game-path "${gamePath}"`);
+    await exec(`${PROJECTS.injector.artifact} launch --game-path "${gamePath}"`);
   } else if (operation === 'inject') {
     // ensure the injector and runtime are built
-    if (!ensureArtifacts()) {
+    if (!await ensureArtifacts()) {
       process.exit(4);
     }
 
     // launch the injector
-    await exec(`${EXE_ARTIFACT_PATHS.injector} inject`);
+    await exec(`${PROJECTS.injector.artifact} inject`);
   }
 }

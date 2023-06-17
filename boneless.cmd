@@ -1,2 +1,2 @@
 @echo off
-node %~dp0\boneless.mjs %*
+node %~dp0\scripts\boneless.mjs %*

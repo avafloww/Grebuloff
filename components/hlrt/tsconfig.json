@@ -8,7 +8,7 @@
     "baseUrl": "./",
     "allowJs": true,
     "checkJs": true,
-    "outDir": "../build/hlrt",
+    "outDir": "../../build/hlrt",
     "sourceRoot": "./src",
     "newLine": "lf",
     "inlineSourceMap": true,
