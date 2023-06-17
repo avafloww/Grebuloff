@@ -1,4 +1,4 @@
-use crate::runtime::JsEngine;
+use crate::runtime::engine::*;
 
 #[test]
 fn to_string() {
