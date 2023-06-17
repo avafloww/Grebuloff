@@ -1,5 +1,6 @@
 {
   "module": true,
+  "packageManager": "pnpm@8.6.2",
   "engines": {
     "node": ">=16"
   },
