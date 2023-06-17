@@ -95,9 +95,11 @@ const config = {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
       },
-      defaultMode: 'dark',
-      disableSwitch: false,
-      respectPrefersColorScheme: false,
+      colorMode: {
+        defaultMode: 'dark',
+        disableSwitch: false,
+        respectPrefersColorScheme: false,
+      }
     }),
 };
 
