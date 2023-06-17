@@ -1,4 +1,4 @@
-use crate::runtime::engine::JsEngine;
+use super::JsEngine;
 use std::fmt;
 use std::string::String as StdString;
 

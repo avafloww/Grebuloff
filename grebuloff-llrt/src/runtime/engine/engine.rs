@@ -1,5 +1,5 @@
 // largely copied from MiniV8: mini_v8.rs
-use crate::runtime::*;
+use super::*;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::BTreeMap;

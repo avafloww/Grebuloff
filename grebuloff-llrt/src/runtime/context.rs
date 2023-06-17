@@ -1,4 +1,4 @@
-use crate::runtime::{Invocation, JsEngine};
+use super::engine::{Invocation, JsEngine};
 use log::info;
 use std::collections::HashMap;
 use std::sync::{Arc, Once, OnceLock};
@@ -114,7 +114,7 @@ fn runtime_thread(options: ContextOptions, context_tx: oneshot::Sender<Arc<JsEng
     info!("runtime thread stopping for context: {:?}", options);
 }
 
-fn add_base_api(engine: &JsEngine) -> crate::runtime::error::Result<()> {
+fn add_base_api(engine: &JsEngine) -> crate::runtime::engine::Result<()> {
     let global = engine.global();
 
     let console = engine.create_object();
@@ -125,13 +125,13 @@ fn add_base_api(engine: &JsEngine) -> crate::runtime::error::Result<()> {
     Ok(())
 }
 
-fn add_privileged_api(engine: &JsEngine) -> crate::runtime::error::Result<()> {
+fn add_privileged_api(engine: &JsEngine) -> crate::runtime::engine::Result<()> {
     let mut _global = engine.global();
 
     Ok(())
 }
 
-fn handle_console(inv: Invocation) -> crate::runtime::error::Result<()> {
+fn handle_console(inv: Invocation) -> crate::runtime::engine::Result<()> {
     let msg = inv.args.from::<String>(&inv.engine, 0)?;
 
     info!("console.log: {:?}", msg);
