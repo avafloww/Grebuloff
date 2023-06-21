@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "components/macros",
     "components/injector",
     "components/llrt",
 ]

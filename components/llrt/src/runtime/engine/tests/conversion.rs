@@ -10,17 +10,17 @@ fn option() {
     let num_val = Some(123).to_value(&engine).unwrap();
     assert!(num_val.is_number());
 
-    let none: Option<()> = FromValue::from_value(none_val.clone(), &engine).unwrap();
+    let none: Option<()> = FromJsValue::from_value(none_val.clone(), &engine).unwrap();
     assert_eq!(none, None::<()>);
-    let none: Option<()> = FromValue::from_value(Value::Null, &engine).unwrap();
+    let none: Option<()> = FromJsValue::from_value(JsValue::Null, &engine).unwrap();
     assert_eq!(none, None::<()>);
-    let none: Option<()> = FromValue::from_value(Value::Undefined, &engine).unwrap();
+    let none: Option<()> = FromJsValue::from_value(JsValue::Undefined, &engine).unwrap();
     assert_eq!(none, None::<()>);
-    let some_num: Option<usize> = FromValue::from_value(num_val.clone(), &engine).unwrap();
+    let some_num: Option<usize> = FromJsValue::from_value(num_val.clone(), &engine).unwrap();
     assert_eq!(some_num, Some(123));
-    let num: usize = FromValue::from_value(num_val.clone(), &engine).unwrap();
+    let num: usize = FromJsValue::from_value(num_val.clone(), &engine).unwrap();
     assert_eq!(num, 123);
-    let num_zero: usize = FromValue::from_value(none_val.clone(), &engine).unwrap();
+    let num_zero: usize = FromJsValue::from_value(none_val.clone(), &engine).unwrap();
     assert_eq!(num_zero, 0);
 }
 
@@ -29,13 +29,13 @@ fn variadic() {
     let engine = JsEngine::new();
     let values = (true, false, true).to_values(&engine).unwrap();
 
-    let var: Variadic<bool> = FromValues::from_values(values.clone(), &engine).unwrap();
+    let var: Variadic<bool> = FromJsValues::from_values(values.clone(), &engine).unwrap();
     assert_eq!(*var, vec![true, false, true]);
 
     let values = (true, Variadic::from_vec(vec![false, true]))
         .to_values(&engine)
         .unwrap();
-    let var: Variadic<bool> = FromValues::from_values(values.clone(), &engine).unwrap();
+    let var: Variadic<bool> = FromJsValues::from_values(values.clone(), &engine).unwrap();
     assert_eq!(*var, vec![true, false, true]);
 }
 
@@ -44,25 +44,25 @@ fn tuple() {
     let engine = JsEngine::new();
     let values = (true, false, true).to_values(&engine).unwrap();
 
-    let out: (bool, bool, bool) = FromValues::from_values(values.clone(), &engine).unwrap();
+    let out: (bool, bool, bool) = FromJsValues::from_values(values.clone(), &engine).unwrap();
     assert_eq!((true, false, true), out);
 
-    let out: (bool, bool) = FromValues::from_values(values.clone(), &engine).unwrap();
+    let out: (bool, bool) = FromJsValues::from_values(values.clone(), &engine).unwrap();
     assert_eq!((true, false), out);
 
-    type Overflow = (bool, bool, bool, Value, Value);
-    let (a, b, c, d, e): Overflow = FromValues::from_values(values.clone(), &engine).unwrap();
+    type Overflow = (bool, bool, bool, JsValue, JsValue);
+    let (a, b, c, d, e): Overflow = FromJsValues::from_values(values.clone(), &engine).unwrap();
     assert_eq!((true, false, true), (a, b, c));
     assert!(d.is_undefined());
     assert!(e.is_undefined());
 
     type VariadicTuple = (bool, Variadic<bool>);
-    let (a, var): VariadicTuple = FromValues::from_values(values.clone(), &engine).unwrap();
+    let (a, var): VariadicTuple = FromJsValues::from_values(values.clone(), &engine).unwrap();
     assert_eq!(true, a);
     assert_eq!(*var, vec![false, true]);
 
     type VariadicOver = (bool, bool, bool, bool, Variadic<bool>);
-    let (a, b, c, d, var): VariadicOver = FromValues::from_values(values.clone(), &engine).unwrap();
+    let (a, b, c, d, var): VariadicOver = FromJsValues::from_values(values.clone(), &engine).unwrap();
     assert_eq!((true, false, true, false), (a, b, c, d));
     // assert_eq!(*var, vec![]); // todo: this test fails on nightly 2023-06-02
 }
@@ -78,7 +78,7 @@ fn hash_map() {
     let list = map
         .to_value(&engine)
         .unwrap()
-        .into::<Object>(&engine)
+        .into::<JsObject>(&engine)
         .unwrap()
         .properties(false)
         .unwrap()
@@ -101,7 +101,7 @@ fn btree_map() {
     let list = map
         .to_value(&engine)
         .unwrap()
-        .into::<Object>(&engine)
+        .into::<JsObject>(&engine)
         .unwrap()
         .properties(false)
         .unwrap()
@@ -117,10 +117,10 @@ fn btree_map() {
 fn vec() {
     let vec = vec![1, 2, 3];
     let engine = JsEngine::new();
-    let list: Result<Vec<usize>> = vec
+    let list: JsResult<Vec<usize>> = vec
         .to_value(&engine)
         .unwrap()
-        .into::<Array>(&engine)
+        .into::<JsArray>(&engine)
         .unwrap()
         .elements()
         .collect();
@@ -131,10 +131,10 @@ fn vec() {
 fn btree_set() {
     let btree_set: BTreeSet<_> = vec![1, 2, 3].into_iter().collect();
     let engine = JsEngine::new();
-    let list: Result<BTreeSet<usize>> = btree_set
+    let list: JsResult<BTreeSet<usize>> = btree_set
         .to_value(&engine)
         .unwrap()
-        .into::<Array>(&engine)
+        .into::<JsArray>(&engine)
         .unwrap()
         .elements()
         .collect();
@@ -145,10 +145,10 @@ fn btree_set() {
 fn hash_set() {
     let hash_set: HashSet<_> = vec![1, 2, 3].into_iter().collect();
     let engine = JsEngine::new();
-    let list: Result<HashSet<usize>> = hash_set
+    let list: JsResult<HashSet<usize>> = hash_set
         .to_value(&engine)
         .unwrap()
-        .into::<Array>(&engine)
+        .into::<JsArray>(&engine)
         .unwrap()
         .elements()
         .collect();

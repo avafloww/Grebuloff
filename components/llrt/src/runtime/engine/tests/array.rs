@@ -9,9 +9,9 @@ fn set_get() {
     array.set(0, 123).unwrap();
     array.set(2, 456).unwrap();
     assert_eq!(array.get::<StdString>(0).unwrap(), "123");
-    assert!(array.get::<Value>(1).unwrap().is_undefined());
+    assert!(array.get::<JsValue>(1).unwrap().is_undefined());
     assert_eq!(array.get::<StdString>(2).unwrap(), "456");
-    assert!(array.get::<Value>(3).unwrap().is_undefined());
+    assert!(array.get::<JsValue>(3).unwrap().is_undefined());
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn push() {
     array.push(4).unwrap();
     assert_eq!(array.get::<usize>(0).unwrap(), 0);
     assert_eq!(array.get::<usize>(1).unwrap(), 1);
-    assert!(array.get::<Value>(2).unwrap().is_undefined());
+    assert!(array.get::<JsValue>(2).unwrap().is_undefined());
     assert_eq!(array.get::<usize>(3).unwrap(), 3);
     assert_eq!(array.get::<usize>(4).unwrap(), 4);
     assert_eq!(array.len(), 5);
@@ -53,6 +53,6 @@ fn elements() {
     array.set(3, 3).unwrap();
     array.push(4).unwrap();
 
-    let list: Result<Vec<usize>> = array.elements().collect();
+    let list: JsResult<Vec<usize>> = array.elements().collect();
     assert_eq!(list.unwrap(), vec![0, 1, 0, 3, 4]);
 }

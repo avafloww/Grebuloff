@@ -35,10 +35,10 @@ impl JsEngine {
     }
 
     /// Returns the global JavaScript object.
-    pub fn global(&self) -> Object {
+    pub fn global(&self) -> JsObject {
         self.scope(|scope| {
             let global = scope.get_current_context().global(scope);
-            Object {
+            JsObject {
                 engine: self.clone(),
                 handle: v8::Global::new(scope, global),
             }
@@ -46,10 +46,10 @@ impl JsEngine {
     }
 
     /// Executes a JavaScript script and returns its result.
-    pub fn eval<S, R>(&self, script: S) -> Result<R>
+    pub fn eval<S, R>(&self, script: S) -> JsResult<R>
     where
         S: Into<Script>,
-        R: FromValue,
+        R: FromJsValue,
     {
         let script = script.into();
         let isolate_handle = self.interface.isolate_handle();
@@ -62,12 +62,12 @@ impl JsEngine {
                 },
             )?
             .into(self),
-            (false, Some(_)) => Err(Error::InvalidTimeout),
+            (false, Some(_)) => Err(JsError::InvalidTimeout),
             (_, None) => self.eval_inner(script)?.into(self),
         }
     }
 
-    fn eval_inner(&self, script: Script) -> Result<Value> {
+    fn eval_inner(&self, script: Script) -> JsResult<JsValue> {
         self.try_catch(|scope| {
             let source = create_string(scope, &script.source);
             let origin = script.origin.map(|o| {
@@ -90,7 +90,7 @@ impl JsEngine {
             self.exception(scope)?;
             let result = script.unwrap().run(scope);
             self.exception(scope)?;
-            Ok(Value::from_v8_value(self, scope, result.unwrap()))
+            Ok(JsValue::from_v8_value(self, scope, result.unwrap()))
         })
     }
 
@@ -139,10 +139,10 @@ impl JsEngine {
     /// # Panics
     ///
     /// Panics if source value is longer than `(1 << 28) - 16` bytes.
-    pub fn create_string(&self, value: &str) -> String {
+    pub fn create_string(&self, value: &str) -> JsString {
         self.scope(|scope| {
             let string = create_string(scope, value);
-            String {
+            JsString {
                 engine: self.clone(),
                 handle: v8::Global::new(scope, string),
             }
@@ -150,10 +150,10 @@ impl JsEngine {
     }
 
     /// Creates and returns an empty `Array` managed by V8.
-    pub fn create_array(&self) -> Array {
+    pub fn create_array(&self) -> JsArray {
         self.scope(|scope| {
             let array = v8::Array::new(scope, 0);
-            Array {
+            JsArray {
                 engine: self.clone(),
                 handle: v8::Global::new(scope, array),
             }
@@ -161,10 +161,10 @@ impl JsEngine {
     }
 
     /// Creates and returns an empty `Object` managed by V8.
-    pub fn create_object(&self) -> Object {
+    pub fn create_object(&self) -> JsObject {
         self.scope(|scope| {
             let object = v8::Object::new(scope);
-            Object {
+            JsObject {
                 engine: self.clone(),
                 handle: v8::Global::new(scope, object),
             }
@@ -176,10 +176,10 @@ impl JsEngine {
     ///
     /// This is a thin wrapper around `JsEngine::create_object` and `Object::set`. See `Object::set`
     /// for how this method might return an error.
-    pub fn create_object_from<K, V, I>(&self, iter: I) -> Result<Object>
+    pub fn create_object_from<K, V, I>(&self, iter: I) -> JsResult<JsObject>
     where
-        K: ToValue,
-        V: ToValue,
+        K: ToJsValue,
+        V: ToJsValue,
         I: IntoIterator<Item = (K, V)>,
     {
         let object = self.create_object();
@@ -200,12 +200,12 @@ impl JsEngine {
     /// For details on Rust-to-JavaScript conversions, refer to the `ToValue` and `ToValues` traits.
     ///
     /// If the provided function panics, the executable will be aborted.
-    pub fn create_function<F, R>(&self, func: F) -> Function
+    pub fn create_function<F, R>(&self, func: F) -> JsFunction
     where
-        F: Fn(Invocation) -> Result<R> + 'static,
-        R: ToValue,
+        F: Fn(Invocation) -> JsResult<R> + 'static,
+        R: ToJsValue,
     {
-        let func = move |engine: &JsEngine, this: Value, args: Values| {
+        let func = move |engine: &JsEngine, this: JsValue, args: JsValues| {
             func(Invocation {
                 engine: engine.clone(),
                 this,
@@ -236,13 +236,13 @@ impl JsEngine {
                 // on the interface stack during the current block:
                 let ptr: *mut v8::HandleScope<'static> = unsafe { std::mem::transmute(ptr) };
                 engine.interface.push(ptr);
-                let this = Value::from_v8_value(&engine, scope, fca.this().into());
+                let this = JsValue::from_v8_value(&engine, scope, fca.this().into());
                 let len = fca.length();
                 let mut args = Vec::with_capacity(len as usize);
                 for i in 0..len {
-                    args.push(Value::from_v8_value(&engine, scope, fca.get(i)));
+                    args.push(JsValue::from_v8_value(&engine, scope, fca.get(i)));
                 }
-                match callback(&engine, this, Values::from_vec(args)) {
+                match callback(&engine, this, JsValues::from_vec(args)) {
                     Ok(v) => {
                         rv.set(v.to_v8_value(scope));
                     }
@@ -268,7 +268,7 @@ impl JsEngine {
             // mem::size_of::<CallbackInfo>;
             let drop_ext = Box::new(move || drop(unsafe { Box::from_raw(ptr) }));
             add_finalizer(scope, value, drop_ext);
-            Function {
+            JsFunction {
                 engine: self.clone(),
                 handle: v8::Global::new(scope, value),
             }
@@ -279,16 +279,16 @@ impl JsEngine {
     ///
     /// This is a version of `create_function` that accepts a FnMut argument. Refer to
     /// `create_function` for more information about the implementation.
-    pub fn create_function_mut<F, R>(&self, func: F) -> Function
+    pub fn create_function_mut<F, R>(&self, func: F) -> JsFunction
     where
-        F: FnMut(Invocation) -> Result<R> + 'static,
-        R: ToValue,
+        F: FnMut(Invocation) -> JsResult<R> + 'static,
+        R: ToJsValue,
     {
         let func = RefCell::new(func);
         self.create_function(move |invocation| {
             (&mut *func
                 .try_borrow_mut()
-                .map_err(|_| Error::RecursiveMutCallback)?)(invocation)
+                .map_err(|_| JsError::RecursiveMutCallback)?)(invocation)
         })
     }
 
@@ -310,11 +310,11 @@ impl JsEngine {
         self.interface.try_catch(func)
     }
 
-    pub(crate) fn exception(&self, scope: &mut v8::TryCatch<v8::HandleScope>) -> Result<()> {
+    pub(crate) fn exception(&self, scope: &mut v8::TryCatch<v8::HandleScope>) -> JsResult<()> {
         if scope.has_terminated() {
-            Err(Error::Timeout)
+            Err(JsError::Timeout)
         } else if let Some(exception) = scope.exception() {
-            Err(Error::Value(Value::from_v8_value(self, scope, exception)))
+            Err(JsError::Value(JsValue::from_v8_value(self, scope, exception)))
         } else {
             Ok(())
         }
@@ -488,7 +488,7 @@ fn add_finalizer<T: 'static>(
     rc.replace(Some(weak));
 }
 
-type Callback = Box<dyn Fn(&JsEngine, Value, Values) -> Result<Value>>;
+type Callback = Box<dyn Fn(&JsEngine, JsValue, JsValues) -> JsResult<JsValue>>;
 
 struct CallbackInfo {
     engine: JsEngine,

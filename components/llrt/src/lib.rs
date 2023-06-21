@@ -126,7 +126,7 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
 
     info!("--------------------------------------------------");
     info!(
-        "Grebuloff Runtime starting (load method: {:?})",
+        "Grebuloff Low-Level Runtime starting (load method: {:?})",
         get_load_method()
     );
     info!("Build time: {}", env!("VERGEN_BUILD_TIMESTAMP"));

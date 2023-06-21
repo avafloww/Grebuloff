@@ -3,17 +3,17 @@ use std::fmt;
 use std::marker::PhantomData;
 
 #[derive(Clone)]
-pub struct Array {
+pub struct JsArray {
     pub(crate) engine: JsEngine,
     pub(crate) handle: v8::Global<v8::Array>,
 }
 
-impl Array {
+impl JsArray {
     /// Consumes the array and downgrades it to a JavaScript object.
-    pub fn into_object(self) -> Object {
+    pub fn into_object(self) -> JsObject {
         self.engine.clone().scope(|scope| {
             let object: v8::Local<v8::Object> = v8::Local::new(scope, self.handle.clone()).into();
-            Object {
+            JsObject {
                 engine: self.engine,
                 handle: v8::Global::new(scope, object),
             }
@@ -24,13 +24,13 @@ impl Array {
     /// index exists.
     ///
     /// Returns an error if `FromValue::from_value` fails for the element.
-    pub fn get<V: FromValue>(&self, index: u32) -> Result<V> {
+    pub fn get<V: FromJsValue>(&self, index: u32) -> JsResult<V> {
         self.engine
             .try_catch(|scope| {
                 let array = v8::Local::new(scope, self.handle.clone());
                 let result = array.get_index(scope, index);
                 self.engine.exception(scope)?;
-                Ok(Value::from_v8_value(&self.engine, scope, result.unwrap()))
+                Ok(JsValue::from_v8_value(&self.engine, scope, result.unwrap()))
             })
             .and_then(|v| v.into(&self.engine))
     }
@@ -38,7 +38,7 @@ impl Array {
     /// Sets an array element using the given index and value.
     ///
     /// Returns an error if `ToValue::to_value` fails for the value.
-    pub fn set<V: ToValue>(&self, index: u32, value: V) -> Result<()> {
+    pub fn set<V: ToJsValue>(&self, index: u32, value: V) -> JsResult<()> {
         let value = value.to_value(&self.engine)?;
         self.engine.try_catch(|scope| {
             let array = v8::Local::new(scope, self.handle.clone());
@@ -56,12 +56,12 @@ impl Array {
 
     /// Pushes an element to the end of the array. This is a shortcut for `set` using `len` as the
     /// index.
-    pub fn push<V: ToValue>(&self, value: V) -> Result<()> {
+    pub fn push<V: ToJsValue>(&self, value: V) -> JsResult<()> {
         self.set(self.len(), value)
     }
 
     /// Returns an iterator over the array's indexable values.
-    pub fn elements<V: FromValue>(self) -> Elements<V> {
+    pub fn elements<V: FromJsValue>(self) -> Elements<V> {
         Elements {
             array: self,
             index: 0,
@@ -71,12 +71,12 @@ impl Array {
     }
 }
 
-impl fmt::Debug for Array {
+impl fmt::Debug for JsArray {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let len = self.len();
         write!(f, "[")?;
         for i in 0..len {
-            match self.get::<Value>(i) {
+            match self.get::<JsValue>(i) {
                 Ok(v) => write!(f, "{:?}", v)?,
                 Err(_) => write!(f, "?")?,
             };
@@ -89,14 +89,14 @@ impl fmt::Debug for Array {
 }
 
 pub struct Elements<V> {
-    array: Array,
+    array: JsArray,
     index: u32,
     len: Option<u32>,
     _phantom: PhantomData<V>,
 }
 
-impl<V: FromValue> Iterator for Elements<V> {
-    type Item = Result<V>;
+impl<V: FromJsValue> Iterator for Elements<V> {
+    type Item = JsResult<V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.len.is_none() {

@@ -28,14 +28,14 @@ fn eval_origin() {
 #[test]
 fn eval_timeout() {
     let engine = JsEngine::new();
-    let result = engine.eval::<_, Value>(Script {
+    let result = engine.eval::<_, JsValue>(Script {
         source: "a = 0; while (true) { a++; }".to_owned(),
         timeout: Some(Duration::from_millis(50)),
         ..Default::default()
     });
 
     match result {
-        Err(Error::Timeout) => {}
+        Err(JsError::Timeout) => {}
         _ => panic!("unexpected result: {:?}", result),
     }
 
@@ -47,7 +47,7 @@ fn eval_timeout() {
 #[test]
 fn eval_wasm() {
     let engine = JsEngine::new();
-    let result = engine.eval::<_, Value>(
+    let result = engine.eval::<_, JsValue>(
         r#"
         let bytes = new Uint8Array([
             0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7f,
@@ -62,7 +62,7 @@ fn eval_wasm() {
     );
 
     match result {
-        Ok(Value::Number(n)) if n == 7.0 => {}
+        Ok(JsValue::Number(n)) if n == 7.0 => {}
         _ => panic!("unexpected result: {:?}", result),
     }
 }
@@ -74,7 +74,7 @@ fn value_cross_contamination() {
     let str_1 = engine_1.create_string("123");
     let engine_2 = JsEngine::new();
     let _str_2 = engine_2.create_string("456");
-    let _ = Value::String(str_1).coerce_number(&engine_2);
+    let _ = JsValue::String(str_1).coerce_number(&engine_2);
 }
 
 #[test]

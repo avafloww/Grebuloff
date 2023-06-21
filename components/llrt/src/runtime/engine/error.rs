@@ -4,11 +4,11 @@ use std::fmt;
 use std::result::Result as StdResult;
 
 /// `std::result::Result` specialized for this crate's `Error` type.
-pub type Result<T> = StdResult<T, Error>;
+pub type JsResult<T> = StdResult<T, JsError>;
 
 /// An error originating from `JsEngine` usage.
 #[derive(Debug)]
-pub enum Error {
+pub enum JsError {
     /// A Rust value could not be converted to a JavaScript value.
     ToJsConversionError {
         /// Name of the Rust type that could not be converted.
@@ -37,54 +37,54 @@ pub enum Error {
     /// This can be used for returning user-defined errors from callbacks.
     ExternalError(Box<dyn StdError + 'static>),
     /// An exception that occurred within the JavaScript environment.
-    Value(Value),
+    Value(JsValue),
 }
 
-impl Error {
+impl JsError {
     /// Normalizes an error into a JavaScript value.
-    pub fn to_value(self, engine: &JsEngine) -> Value {
+    pub fn to_value(self, engine: &JsEngine) -> JsValue {
         match self {
-            Error::Value(value) => value,
-            Error::ToJsConversionError { .. } | Error::FromJsConversionError { .. } => {
+            JsError::Value(value) => value,
+            JsError::ToJsConversionError { .. } | JsError::FromJsConversionError { .. } => {
                 let object = engine.create_object();
                 let _ = object.set("name", "TypeError");
                 let _ = object.set("message", self.to_string());
-                Value::Object(object)
+                JsValue::Object(object)
             }
             _ => {
                 let object = engine.create_object();
                 let _ = object.set("name", "Error");
                 let _ = object.set("message", self.to_string());
-                Value::Object(object)
+                JsValue::Object(object)
             }
         }
     }
 
-    pub(crate) fn from_js_conversion(from: &'static str, to: &'static str) -> Error {
-        Error::FromJsConversionError { from, to }
+    pub(crate) fn from_js_conversion(from: &'static str, to: &'static str) -> JsError {
+        JsError::FromJsConversionError { from, to }
     }
 }
 
-impl StdError for Error {
+impl StdError for JsError {
     fn description(&self) -> &'static str {
         "JavaScript execution error"
     }
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for JsError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Error::ToJsConversionError { from, to } => {
+            JsError::ToJsConversionError { from, to } => {
                 write!(fmt, "error converting {} to JavaScript {}", from, to)
             }
-            Error::FromJsConversionError { from, to } => {
+            JsError::FromJsConversionError { from, to } => {
                 write!(fmt, "error converting JavaScript {} to {}", from, to)
             }
-            Error::Timeout => write!(fmt, "evaluation timed out"),
-            Error::RecursiveMutCallback => write!(fmt, "mutable callback called recursively"),
-            Error::InvalidTimeout => write!(fmt, "invalid request for evaluation timeout"),
-            Error::ExternalError(ref err) => err.fmt(fmt),
-            Error::Value(v) => write!(fmt, "JavaScript runtime error ({})", v.type_name()),
+            JsError::Timeout => write!(fmt, "evaluation timed out"),
+            JsError::RecursiveMutCallback => write!(fmt, "mutable callback called recursively"),
+            JsError::InvalidTimeout => write!(fmt, "invalid request for evaluation timeout"),
+            JsError::ExternalError(ref err) => err.fmt(fmt),
+            JsError::Value(v) => write!(fmt, "JavaScript runtime error ({})", v.type_name()),
         }
     }
 }

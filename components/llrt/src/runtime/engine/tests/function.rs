@@ -4,9 +4,9 @@ use std::string::String as StdString;
 #[test]
 fn js_function() {
     let engine = JsEngine::new();
-    let func: Value = engine.eval("(function(y) { return this + y; })").unwrap();
+    let func: JsValue = engine.eval("(function(y) { return this + y; })").unwrap();
     assert!(func.is_function());
-    let func = if let Value::Function(f) = func {
+    let func = if let JsValue::Function(f) = func {
         f
     } else {
         unreachable!();
@@ -20,14 +20,14 @@ fn js_function() {
 #[test]
 fn js_constructor() {
     let engine = JsEngine::new();
-    let func: Function = engine.eval("(function(x) { this.x = x; })").unwrap();
-    let value: Object = func.call_new((10,)).unwrap();
+    let func: JsFunction = engine.eval("(function(x) { this.x = x; })").unwrap();
+    let value: JsObject = func.call_new((10,)).unwrap();
     assert_eq!(10, value.get("x").unwrap());
 }
 
 #[test]
 fn rust_function() {
-    fn add(inv: Invocation) -> Result<usize> {
+    fn add(inv: Invocation) -> JsResult<usize> {
         let (a, b): (usize, usize) = inv.args.into(&inv.engine)?;
         return Ok(a + b);
     }
@@ -44,8 +44,8 @@ fn rust_function() {
 
 #[test]
 fn rust_function_error() {
-    fn err(inv: Invocation) -> Result<()> {
-        let _: (Function,) = inv.args.into(&inv.engine)?;
+    fn err(inv: Invocation) -> JsResult<()> {
+        let _: (JsFunction,) = inv.args.into(&inv.engine)?;
         Ok(())
     }
 
@@ -111,7 +111,7 @@ fn rust_closure_mut_callback_error() {
             // Produce a mutable reference:
             let r = v.as_mut().unwrap();
             // Whoops, this will recurse into the function and produce another mutable reference!
-            engine.global().get::<_, Function>("f")?.call((true,))?;
+            engine.global().get::<_, JsFunction>("f")?.call((true,))?;
             println!("Should not get here, mutable aliasing has occurred!");
             println!("value at {:p}", r as *mut _);
             println!("value is {}", r);
@@ -123,11 +123,11 @@ fn rust_closure_mut_callback_error() {
     engine.global().set("f", f).unwrap();
     match engine
         .global()
-        .get::<_, Function>("f")
+        .get::<_, JsFunction>("f")
         .unwrap()
         .call::<_, ()>((false,))
     {
-        Err(Error::Value(v)) => {
+        Err(JsError::Value(v)) => {
             let message: StdString = v.as_object().unwrap().get("message").unwrap();
             assert_eq!(message, "mutable callback called recursively".to_string());
         }
@@ -137,7 +137,7 @@ fn rust_closure_mut_callback_error() {
 
 #[test]
 fn number_this() {
-    fn add(inv: Invocation) -> Result<f64> {
+    fn add(inv: Invocation) -> JsResult<f64> {
         let this: f64 = inv.this.into(&inv.engine)?;
         let (acc,): (f64,) = inv.args.into(&inv.engine)?;
         return Ok(this + acc);

@@ -10,7 +10,7 @@ fn set_get() {
     object.set(123, "a").unwrap();
     let parent = engine.create_object();
     parent.set("obj", object).unwrap();
-    let object: Object = parent.get("obj").unwrap();
+    let object: JsObject = parent.get("obj").unwrap();
     assert_eq!(object.get::<_, i8>("a").unwrap(), 123);
     assert_eq!(object.get::<_, StdString>("a").unwrap(), "123");
     assert_eq!(object.get::<_, StdString>("123").unwrap(), "a");
@@ -44,7 +44,7 @@ fn keys() {
     object.set("c", 3).unwrap();
     object.set("b", 2).unwrap();
     object.set("a", 1).unwrap();
-    let keys: Result<Vec<StdString>> = object.keys(true).unwrap().elements().collect();
+    let keys: JsResult<Vec<StdString>> = object.keys(true).unwrap().elements().collect();
     assert_eq!(
         keys.unwrap(),
         vec!["c".to_string(), "b".to_string(), "a".to_string()]
@@ -57,7 +57,7 @@ fn properties() {
 
     let object = engine.create_object();
     object.set("a", 123).unwrap();
-    object.set(4, Value::Undefined).unwrap();
+    object.set(4, JsValue::Undefined).unwrap();
     object.set(123, "456").unwrap();
 
     let list = object

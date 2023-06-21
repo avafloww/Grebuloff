@@ -1,11 +1,9 @@
-use log::debug;
-
 pub fn host_import_module_dynamically_callback<'s>(
-    scope: &mut v8::HandleScope<'s>,
+    _scope: &mut v8::HandleScope<'s>,
     _host_defined_options: v8::Local<'s, v8::Data>,
-    resource_name: v8::Local<'s, v8::Value>,
-    specifier: v8::Local<'s, v8::String>,
-    import_assertions: v8::Local<'s, v8::FixedArray>,
+    _resource_name: v8::Local<'s, v8::Value>,
+    _specifier: v8::Local<'s, v8::String>,
+    _import_assertions: v8::Local<'s, v8::FixedArray>,
 ) -> Option<v8::Local<'s, v8::Promise>> {
     // TODO
     None
@@ -70,9 +68,9 @@ pub fn host_import_module_dynamically_callback<'s>(
 }
 
 pub extern "C" fn host_initialize_import_meta_object_callback(
-    context: v8::Local<v8::Context>,
-    module: v8::Local<v8::Module>,
-    meta: v8::Local<v8::Object>,
+    _context: v8::Local<v8::Context>,
+    _module: v8::Local<v8::Module>,
+    _meta: v8::Local<v8::Object>,
 ) {
     // TODO
     // // SAFETY: `CallbackScope` can be safely constructed from `Local<Context>`
@@ -99,16 +97,17 @@ pub extern "C" fn host_initialize_import_meta_object_callback(
     // meta.set(scope, resolve_key.into(), val.into());
 }
 
-pub fn throw_type_error(scope: &mut v8::HandleScope, message: impl AsRef<str>) {
-    let message = v8::String::new(scope, message.as_ref()).unwrap();
-    let exception = v8::Exception::type_error(scope, message);
-    scope.throw_exception(exception);
-}
+// pub fn throw_type_error(scope: &mut v8::HandleScope, message: impl AsRef<str>) {
+//     let message = v8::String::new(scope, message.as_ref()).unwrap();
+//     let exception = v8::Exception::type_error(scope, message);
+//     scope.throw_exception(exception);
+// }
 
+#[allow(unused)]
 fn import_meta_resolve(
-    scope: &mut v8::HandleScope,
-    args: v8::FunctionCallbackArguments,
-    mut rv: v8::ReturnValue,
+    _scope: &mut v8::HandleScope,
+    _args: v8::FunctionCallbackArguments,
+    mut _rv: v8::ReturnValue,
 ) {
     // TODO
     // if args.length() > 1 {
