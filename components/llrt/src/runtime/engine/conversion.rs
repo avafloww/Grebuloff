@@ -4,6 +4,15 @@ use std::hash::{BuildHasher, Hash};
 use std::string::String as StdString;
 use std::time::Duration;
 
+impl<T: ToJsValue> ToJsValue for anyhow::Result<T, anyhow::Error> {
+    fn to_value(self, engine: &JsEngine) -> JsResult<JsValue> {
+        match self {
+            Ok(val) => Ok(val.to_value(engine)?),
+            Err(err) => Err(JsError::ExternalError(err)),
+        }
+    }
+}
+
 impl ToJsValue for JsValue {
     fn to_value(self, _engine: &JsEngine) -> JsResult<JsValue> {
         Ok(self)

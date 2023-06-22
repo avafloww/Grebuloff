@@ -3,7 +3,6 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::result::Result as StdResult;
 
-/// `std::result::Result` specialized for this crate's `Error` type.
 pub type JsResult<T> = StdResult<T, JsError>;
 
 /// An error originating from `JsEngine` usage.
@@ -35,7 +34,7 @@ pub enum JsError {
     /// A custom error that occurs during runtime.
     ///
     /// This can be used for returning user-defined errors from callbacks.
-    ExternalError(Box<dyn StdError + 'static>),
+    ExternalError(anyhow::Error),
     /// An exception that occurred within the JavaScript environment.
     Value(JsValue),
 }

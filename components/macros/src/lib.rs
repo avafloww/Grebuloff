@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, FnArg, ItemFn, Pat, ReturnType, Type};
+use syn::{parse_macro_input, FnArg, ItemFn, Pat};
 
 #[proc_macro_attribute]
 pub fn js_callable(
