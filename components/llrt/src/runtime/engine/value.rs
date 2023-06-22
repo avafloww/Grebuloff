@@ -30,6 +30,8 @@ pub enum JsValue {
     /// Reference to a JavaScript object. If a value is a function or an array in JavaScript, it
     /// will be converted to `Value::Array` or `Value::Function` instead of `Value::Object`.
     Object(JsObject),
+    /// Reference to a JavaScript promise.
+    Promise(JsPromise),
 }
 
 impl JsValue {
@@ -108,6 +110,15 @@ impl JsValue {
     /// Returns `true` if this is a `Value::Object`, `false` otherwise.
     pub fn is_object(&self) -> bool {
         if let JsValue::Object(_) = *self {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns `true` if this is a `Value::Promise`, `false` otherwise.
+    pub fn is_promise(&self) -> bool {
+        if let JsValue::Promise(_) = *self {
             true
         } else {
             false
@@ -195,6 +206,15 @@ impl JsValue {
         }
     }
 
+    /// Returns `Some` if this is a `Value::Promise`, `None` otherwise.
+    pub fn as_promise(&self) -> Option<&JsPromise> {
+        if let JsValue::Promise(ref value) = *self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+
     /// A wrapper around `FromValue::from_value`.
     pub fn into<T: FromJsValue>(self, engine: &JsEngine) -> JsResult<T> {
         T::from_value(self, engine)
@@ -250,6 +270,7 @@ impl JsValue {
             JsValue::Array(_) => "array",
             JsValue::Object(_) => "object",
             JsValue::String(_) => "string",
+            JsValue::Promise(_) => "promise",
         }
     }
 
@@ -292,6 +313,14 @@ impl JsValue {
                 engine: engine.clone(),
                 handle,
             })
+        } else if value.is_promise() {
+            let value: v8::Local<v8::Promise> = value.try_into().unwrap();
+            let handle = v8::Global::new(scope, value);
+            JsValue::Promise(JsPromise {
+                engine: engine.clone(),
+                handle,
+                resolver: None,
+            })
         } else if value.is_object() {
             let value: v8::Local<v8::Object> = value.try_into().unwrap();
             let handle = v8::Global::new(scope, value);
@@ -318,6 +347,7 @@ impl JsValue {
             JsValue::Array(v) => v8::Local::new(scope, v.handle.clone()).into(),
             JsValue::Object(v) => v8::Local::new(scope, v.handle.clone()).into(),
             JsValue::String(v) => v8::Local::new(scope, v.handle.clone()).into(),
+            JsValue::Promise(v) => v8::Local::new(scope, v.handle.clone()).into(),
         }
     }
 }
@@ -334,6 +364,7 @@ impl fmt::Debug for JsValue {
             JsValue::Array(a) => write!(f, "{:?}", a),
             JsValue::Function(u) => write!(f, "{:?}", u),
             JsValue::Object(o) => write!(f, "{:?}", o),
+            JsValue::Promise(p) => write!(f, "{:?}", p),
         }
     }
 }

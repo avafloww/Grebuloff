@@ -171,3 +171,7 @@ async fn init_async() -> Result<()> {
 
     Ok(())
 }
+
+pub(crate) fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
+    TOKIO_RT.get().unwrap()
+}

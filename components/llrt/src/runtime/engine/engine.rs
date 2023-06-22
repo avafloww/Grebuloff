@@ -1,6 +1,5 @@
 // largely copied from MiniV8: mini_v8.rs
 use super::*;
-use std::any::Any;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -8,6 +7,7 @@ use std::string::String as StdString;
 use std::sync::{Arc, Condvar, Mutex, Once};
 use std::thread;
 use std::time::Duration;
+use std::{any::Any, borrow::Cow};
 
 const CONTEXT_KEY: &str = "context_key";
 
@@ -27,7 +27,7 @@ impl JsEngine {
         }
     }
 
-    pub fn new_with_key(key: &'static str) -> Self {
+    pub fn new_with_key(key: Cow<'static, str>) -> Self {
         let engine = Self::new();
         engine.set_user_data(CONTEXT_KEY, key);
 
@@ -167,6 +167,19 @@ impl JsEngine {
             JsObject {
                 engine: self.clone(),
                 handle: v8::Global::new(scope, object),
+            }
+        })
+    }
+
+    /// Creates and returns a pending `Promise` managed by V8.
+    pub fn create_promise(&self) -> JsPromise {
+        self.scope(|scope| {
+            let resolver = v8::PromiseResolver::new(scope).unwrap();
+            let promise = resolver.get_promise(scope);
+            JsPromise {
+                engine: self.clone(),
+                handle: v8::Global::new(scope, promise),
+                resolver: Some(v8::Global::new(scope, resolver)),
             }
         })
     }
@@ -314,7 +327,9 @@ impl JsEngine {
         if scope.has_terminated() {
             Err(JsError::Timeout)
         } else if let Some(exception) = scope.exception() {
-            Err(JsError::Value(JsValue::from_v8_value(self, scope, exception)))
+            Err(JsError::Value(JsValue::from_v8_value(
+                self, scope, exception,
+            )))
         } else {
             Ok(())
         }

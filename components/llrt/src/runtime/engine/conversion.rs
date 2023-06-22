@@ -97,6 +97,21 @@ impl FromJsValue for JsFunction {
     }
 }
 
+impl ToJsValue for JsPromise {
+    fn to_value(self, _engine: &JsEngine) -> JsResult<JsValue> {
+        Ok(JsValue::Promise(self))
+    }
+}
+
+impl FromJsValue for JsPromise {
+    fn from_value(value: JsValue, _engine: &JsEngine) -> JsResult<JsPromise> {
+        match value {
+            JsValue::Promise(p) => Ok(p),
+            value => Err(JsError::from_js_conversion(value.type_name(), "Promise")),
+        }
+    }
+}
+
 impl ToJsValue for JsObject {
     fn to_value(self, _engine: &JsEngine) -> JsResult<JsValue> {
         Ok(JsValue::Object(self))

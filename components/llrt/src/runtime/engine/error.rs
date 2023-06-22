@@ -31,6 +31,8 @@ pub enum JsError {
     RecursiveMutCallback,
     /// An evaluation timeout was specified from within a Rust function embedded in V8.
     InvalidTimeout,
+    /// An attempt was made to resolve or reject a promise without a resolver.
+    PromiseWithoutResolver,
     /// A custom error that occurs during runtime.
     ///
     /// This can be used for returning user-defined errors from callbacks.
@@ -82,6 +84,7 @@ impl fmt::Display for JsError {
             JsError::Timeout => write!(fmt, "evaluation timed out"),
             JsError::RecursiveMutCallback => write!(fmt, "mutable callback called recursively"),
             JsError::InvalidTimeout => write!(fmt, "invalid request for evaluation timeout"),
+            JsError::PromiseWithoutResolver => write!(fmt, "promise without resolver"),
             JsError::ExternalError(ref err) => err.fmt(fmt),
             JsError::Value(v) => write!(fmt, "JavaScript runtime error ({})", v.type_name()),
         }

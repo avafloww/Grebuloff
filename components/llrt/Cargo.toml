@@ -15,7 +15,7 @@ msgbox = "0.7.0"
 log = "0.4"
 fern = "0.6.2"
 chrono = "0.4.26"
-tokio = { version = "1.28.2", features = ["net", "rt", "rt-multi-thread", "time", "sync"] }
+tokio = { version = "1.28.2", features = ["net", "rt", "rt-multi-thread", "time", "sync", "macros"] }
 rmp = "0.8.11"
 rmp-serde = "1.1.1"
 serde = { version = "1.0.163", features = ["derive"] }

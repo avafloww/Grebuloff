@@ -43,19 +43,46 @@ pub fn js_callable(
         );
     };
 
+    let wrapper = match item.sig.asyncness {
+        Some(_) => {
+            let async_wrapper_ident = format_ident!("__async_js_callable__{}", callable_ident);
+
+            quote! {
+                #[allow(non_snake_case)]
+                async fn #async_wrapper_ident(inv: crate::runtime::engine::Invocation)
+                    -> crate::runtime::engine::JsResult<crate::runtime::engine::JsValue> {
+                    #body
+
+                    crate::runtime::engine::ToJsValue::to_value(
+                        #callable_ident(#(#idents),*).await,
+                        &inv.engine
+                    )
+                }
+
+                #[allow(non_snake_case)]
+                fn #wrapper_ident(inv: crate::runtime::engine::Invocation)
+                    -> crate::runtime::engine::JsResult<crate::runtime::engine::JsValue> {
+                    crate::runtime::callable::execute_async(inv, #async_wrapper_ident)
+                }
+            }
+        }
+        None => quote! {
+            #[allow(non_snake_case)]
+            fn #wrapper_ident(inv: crate::runtime::engine::Invocation)
+                -> crate::runtime::engine::JsResult<crate::runtime::engine::JsValue> {
+                #body
+
+                crate::runtime::engine::ToJsValue::to_value(
+                    #callable_ident(#(#idents),*),
+                    &inv.engine
+                )
+            }
+        },
+    };
+
     // construct the wrapper function, calling to the rust function with all of the args
     quote! {
-        #[allow(non_snake_case)]
-        fn #wrapper_ident(inv: crate::runtime::engine::Invocation)
-            -> crate::runtime::engine::JsResult<crate::runtime::engine::JsValue> {
-            #body
-
-            crate::runtime::engine::ToJsValue::to_value(
-                #callable_ident(#(#idents),*),
-                &inv.engine
-            )
-        }
-
+        #wrapper
         #callable_def
         #orig
     }
