@@ -2,7 +2,7 @@ use crate::get_tokio_rt;
 
 use super::{
     callable,
-    engine::{ContextId, JsEngine, JsResult, ModuleMap},
+    engine::{import::ModuleMap, ContextId, JsEngine, JsResult},
 };
 use anyhow::Result;
 use grebuloff_macros::js_callable;

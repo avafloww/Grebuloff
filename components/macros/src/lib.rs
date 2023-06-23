@@ -49,30 +49,30 @@ pub fn js_callable(
 
             quote! {
                 #[allow(non_snake_case)]
-                async fn #async_wrapper_ident(inv: crate::runtime::engine::Invocation)
-                    -> crate::runtime::engine::JsResult<crate::runtime::engine::JsValue> {
+                async fn #async_wrapper_ident(inv: crate::runtime::engine::types::Invocation)
+                    -> crate::runtime::engine::JsResult<crate::runtime::engine::types::JsValue> {
                     #body
 
-                    crate::runtime::engine::ToJsValue::to_value(
+                    crate::runtime::engine::types::ToJsValue::to_value(
                         #callable_ident(#(#idents),*).await,
                         &inv.engine
                     )
                 }
 
                 #[allow(non_snake_case)]
-                fn #wrapper_ident(inv: crate::runtime::engine::Invocation)
-                    -> crate::runtime::engine::JsResult<crate::runtime::engine::JsValue> {
+                fn #wrapper_ident(inv: crate::runtime::engine::types::Invocation)
+                    -> crate::runtime::engine::JsResult<crate::runtime::engine::types::JsValue> {
                     crate::runtime::callable::execute_async(inv, #async_wrapper_ident)
                 }
             }
         }
         None => quote! {
             #[allow(non_snake_case)]
-            fn #wrapper_ident(inv: crate::runtime::engine::Invocation)
-                -> crate::runtime::engine::JsResult<crate::runtime::engine::JsValue> {
+            fn #wrapper_ident(inv: crate::runtime::engine::types::Invocation)
+                -> crate::runtime::engine::JsResult<crate::runtime::engine::types::JsValue> {
                 #body
 
-                crate::runtime::engine::ToJsValue::to_value(
+                crate::runtime::engine::types::ToJsValue::to_value(
                     #callable_ident(#(#idents),*),
                     &inv.engine
                 )

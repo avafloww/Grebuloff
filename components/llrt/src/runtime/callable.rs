@@ -4,8 +4,8 @@ use log::debug;
 use tokio::task;
 
 use crate::get_tokio_rt;
-
-use super::engine::{Invocation, JsEngine, JsObject, JsResult, JsValue, ToJsValue};
+use crate::runtime::engine::types::*;
+use crate::runtime::engine::*;
 
 /// A JsCallable is the data structure used to represent a function in LLRT
 /// that is callable from JavaScript. It contains the Rust function pointer,
