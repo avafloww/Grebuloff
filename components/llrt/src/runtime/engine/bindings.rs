@@ -1,7 +1,6 @@
 use std::cell::UnsafeCell;
 
-use super::*;
-use crate::runtime::context::JsThreadContext;
+use crate::runtime::context::*;
 use log::debug;
 
 pub fn setup_bindings(isolate: &mut v8::Isolate) {

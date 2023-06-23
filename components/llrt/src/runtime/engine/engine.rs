@@ -1,23 +1,14 @@
+use crate::runtime::context::ContextId;
+
 // largely copied from MiniV8: mini_v8.rs
 use super::types::*;
 use super::*;
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::string::String as StdString;
 use std::sync::{Arc, Condvar, Mutex, Once};
 use std::thread;
 use std::time::Duration;
-use std::{cell::RefCell, fmt};
-
-const CONTEXT_ID_STR: &str = "id";
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ContextId(pub String);
-
-impl fmt::Display for ContextId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 #[derive(Clone)]
 pub struct JsEngine {

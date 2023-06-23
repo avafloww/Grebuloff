@@ -2,17 +2,12 @@ use crate::get_tokio_rt;
 
 use super::{
     callable,
-    engine::{import::ModuleMap, ContextId, JsEngine, JsResult},
+    engine::{import::ModuleMap, JsEngine, JsResult},
 };
 use anyhow::Result;
 use grebuloff_macros::js_callable;
 use log::info;
-use std::{
-    borrow::{BorrowMut, Cow},
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-    path::PathBuf,
-};
+use std::{borrow::Cow, collections::HashMap, fmt, path::PathBuf};
 use std::{cell::RefCell, thread};
 use std::{
     rc::Rc,
@@ -28,6 +23,15 @@ static CONTEXTS: OnceLock<RwLock<HashMap<String, Arc<JsContext>>>> = OnceLock::n
 
 thread_local! {
     static THREAD_CONTEXT: RefCell<Option<Rc<JsThreadContext>>> = RefCell::new(None);
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ContextId(pub String);
+
+impl fmt::Display for ContextId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 /// A thread-safe context container for a runtime thread.
