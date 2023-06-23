@@ -259,7 +259,7 @@ impl JsValue {
         }
     }
 
-    pub(crate) fn type_name(&self) -> &'static str {
+    pub fn type_name(&self) -> &'static str {
         match *self {
             JsValue::Undefined => "undefined",
             JsValue::Null => "null",
@@ -274,7 +274,7 @@ impl JsValue {
         }
     }
 
-    pub(crate) fn from_v8_value(
+    pub fn from_v8_value(
         engine: &JsEngine,
         scope: &mut v8::HandleScope,
         value: v8::Local<v8::Value>,
@@ -333,10 +333,7 @@ impl JsValue {
         }
     }
 
-    pub(crate) fn to_v8_value<'s>(
-        &self,
-        scope: &mut v8::HandleScope<'s>,
-    ) -> v8::Local<'s, v8::Value> {
+    pub fn to_v8_value<'s>(&self, scope: &mut v8::HandleScope<'s>) -> v8::Local<'s, v8::Value> {
         match self {
             JsValue::Undefined => v8::undefined(scope).into(),
             JsValue::Null => v8::null(scope).into(),
@@ -344,10 +341,10 @@ impl JsValue {
             JsValue::Number(v) => v8::Number::new(scope, *v).into(),
             JsValue::Date(v) => v8::Date::new(scope, *v).unwrap().into(),
             JsValue::Function(v) => v8::Local::new(scope, v.handle.clone()).into(),
+            JsValue::Promise(v) => v8::Local::new(scope, v.handle.clone()).into(),
             JsValue::Array(v) => v8::Local::new(scope, v.handle.clone()).into(),
             JsValue::Object(v) => v8::Local::new(scope, v.handle.clone()).into(),
             JsValue::String(v) => v8::Local::new(scope, v.handle.clone()).into(),
-            JsValue::Promise(v) => v8::Local::new(scope, v.handle.clone()).into(),
         }
     }
 }
@@ -361,10 +358,10 @@ impl fmt::Debug for JsValue {
             JsValue::Number(n) => write!(f, "{}", n),
             JsValue::Date(d) => write!(f, "date:{}", d),
             JsValue::String(s) => write!(f, "{:?}", s),
+            JsValue::Promise(p) => write!(f, "{:?}", p),
             JsValue::Array(a) => write!(f, "{:?}", a),
             JsValue::Function(u) => write!(f, "{:?}", u),
             JsValue::Object(o) => write!(f, "{:?}", o),
-            JsValue::Promise(p) => write!(f, "{:?}", p),
         }
     }
 }
@@ -483,7 +480,7 @@ pub trait FromJsValues: Sized {
 /// `T` using [`FromValue`]. `Variadic<T>` can also be returned from a callback, returning a
 /// variable number of values to JavaScript.
 #[derive(Clone)]
-pub struct Variadic<T>(pub(crate) Vec<T>);
+pub struct Variadic<T>(pub Vec<T>);
 
 impl<T> Variadic<T> {
     /// Creates an empty `Variadic` wrapper containing no values.

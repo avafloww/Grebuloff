@@ -1,6 +1,5 @@
 // largely copied from MiniV8: mini_v8.rs
 use super::*;
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::string::String as StdString;
@@ -8,8 +7,18 @@ use std::sync::{Arc, Condvar, Mutex, Once};
 use std::thread;
 use std::time::Duration;
 use std::{any::Any, borrow::Cow};
+use std::{cell::RefCell, fmt};
 
-const CONTEXT_KEY: &str = "context_key";
+const CONTEXT_ID_STR: &str = "id";
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ContextId(pub String);
+
+impl fmt::Display for ContextId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Clone)]
 pub struct JsEngine {
@@ -18,20 +27,17 @@ pub struct JsEngine {
 
 impl JsEngine {
     pub fn new() -> Self {
+        Self::new_with_context(None)
+    }
+
+    pub fn new_with_context(id: Option<ContextId>) -> Self {
         init_v8();
         let mut isolate = v8::Isolate::new(Default::default());
-        init_isolate(&mut isolate);
+        init_isolate(&mut isolate, id);
 
         Self {
             interface: Interface::new(isolate),
         }
-    }
-
-    pub fn new_with_key(key: Cow<'static, str>) -> Self {
-        let engine = Self::new();
-        engine.set_user_data(CONTEXT_KEY, key);
-
-        engine
     }
 
     /// Returns the global JavaScript object.
@@ -94,14 +100,11 @@ impl JsEngine {
         })
     }
 
-    /// Gets the context key that was set when the `JsEngine` was created.
-    /// Returns `None` if no key was set.
-    pub fn get_context_key(&self) -> Option<StdString> {
-        self.interface.use_slot(|m: &AnyMap| {
-            m.0.borrow()
-                .get(CONTEXT_KEY)
-                .and_then(|d| d.downcast_ref::<StdString>().cloned())
-        })
+    /// Gets the context ID that was set when the `JsEngine` was created.
+    /// Returns `None` if no ID was set.
+    pub fn get_context_id(&self) -> Option<ContextId> {
+        self.interface
+            .top(|entry| entry.get_slot::<ContextId>().cloned())
     }
 
     /// Inserts any sort of keyed value of type `T` into the `JsEngine`, typically for later retrieval
@@ -307,7 +310,7 @@ impl JsEngine {
 
     // Opens a new handle scope in the global context. Nesting calls to this or `JsEngine::try_catch`
     // will cause a panic (unless a callback is entered, see `JsEngine::create_function`).
-    pub(crate) fn scope<F, T>(&self, func: F) -> T
+    pub fn scope<F, T>(&self, func: F) -> T
     where
         F: FnOnce(&mut v8::ContextScope<v8::HandleScope>) -> T,
     {
@@ -316,14 +319,14 @@ impl JsEngine {
 
     // Opens a new try-catch scope in the global context. Nesting calls to this or `JsEngine::scope`
     // will cause a panic (unless a callback is entered, see `JsEngine::create_function`).
-    pub(crate) fn try_catch<F, T>(&self, func: F) -> T
+    pub fn try_catch<F, T>(&self, func: F) -> T
     where
         F: FnOnce(&mut v8::TryCatch<v8::HandleScope>) -> T,
     {
         self.interface.try_catch(func)
     }
 
-    pub(crate) fn exception(&self, scope: &mut v8::TryCatch<v8::HandleScope>) -> JsResult<()> {
+    pub fn exception(&self, scope: &mut v8::TryCatch<v8::HandleScope>) -> JsResult<()> {
         if scope.has_terminated() {
             Err(JsError::Timeout)
         } else if let Some(exception) = scope.exception() {
@@ -386,7 +389,7 @@ impl Interface {
     where
         F: FnOnce(&T) -> U,
     {
-        self.top(|entry| func(entry.get_slot()))
+        self.top(|entry| func(entry.get_slot().unwrap()))
     }
 
     fn top<F, T>(&self, func: F) -> T
@@ -425,12 +428,12 @@ impl InterfaceEntry {
         }
     }
 
-    fn get_slot<T: 'static>(&self) -> &T {
+    fn get_slot<T: 'static>(&self) -> Option<&T> {
         match self {
-            InterfaceEntry::Isolate(isolate) => isolate.get_slot::<T>().unwrap(),
+            InterfaceEntry::Isolate(isolate) => isolate.get_slot::<T>(),
             InterfaceEntry::HandleScope(ref ptr) => {
                 let scope: &mut v8::HandleScope = unsafe { &mut **ptr };
-                scope.get_slot::<T>().unwrap()
+                scope.get_slot::<T>()
             }
         }
     }
@@ -460,13 +463,8 @@ fn init_v8() {
     })
 }
 
-fn init_isolate(isolate: &mut v8::Isolate) {
-    isolate.set_host_initialize_import_meta_object_callback(
-        bindings::host_initialize_import_meta_object_callback,
-    );
-    isolate.set_host_import_module_dynamically_callback(
-        bindings::host_import_module_dynamically_callback,
-    );
+fn init_isolate(isolate: &mut v8::Isolate, context_id: Option<ContextId>) {
+    bindings::setup_bindings(isolate);
 
     let scope = &mut v8::HandleScope::new(isolate);
     let context = v8::Context::new(scope);
@@ -476,6 +474,10 @@ fn init_isolate(isolate: &mut v8::Isolate) {
         context: global_context,
     });
     scope.set_slot(AnyMap(Rc::new(RefCell::new(BTreeMap::new()))));
+
+    if context_id.is_some() {
+        scope.set_slot(context_id);
+    }
 }
 
 fn create_string<'s>(scope: &mut v8::HandleScope<'s>, value: &str) -> v8::Local<'s, v8::String> {

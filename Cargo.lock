@@ -958,6 +958,7 @@ dependencies = [
  "msgbox",
  "rmp",
  "rmp-serde",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tokio",

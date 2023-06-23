@@ -3,8 +3,8 @@ use std::fmt;
 
 #[derive(Clone)]
 pub struct JsFunction {
-    pub(crate) engine: JsEngine,
-    pub(crate) handle: v8::Global<v8::Function>,
+    pub engine: JsEngine,
+    pub handle: v8::Global<v8::Function>,
 }
 
 impl JsFunction {

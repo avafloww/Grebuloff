@@ -61,7 +61,7 @@ impl JsError {
         }
     }
 
-    pub(crate) fn from_js_conversion(from: &'static str, to: &'static str) -> JsError {
+    pub fn from_js_conversion(from: &'static str, to: &'static str) -> JsError {
         JsError::FromJsConversionError { from, to }
     }
 }

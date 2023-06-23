@@ -4,8 +4,8 @@ use std::string::String as StdString;
 
 #[derive(Clone)]
 pub struct JsString {
-    pub(crate) engine: JsEngine,
-    pub(crate) handle: v8::Global<v8::String>,
+    pub engine: JsEngine,
+    pub handle: v8::Global<v8::String>,
 }
 
 impl JsString {

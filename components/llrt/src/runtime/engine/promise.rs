@@ -3,9 +3,9 @@ use std::fmt;
 
 #[derive(Clone)]
 pub struct JsPromise {
-    pub(crate) engine: JsEngine,
-    pub(crate) handle: v8::Global<v8::Promise>,
-    pub(crate) resolver: Option<v8::Global<v8::PromiseResolver>>,
+    pub engine: JsEngine,
+    pub handle: v8::Global<v8::Promise>,
+    pub resolver: Option<v8::Global<v8::PromiseResolver>>,
 }
 
 impl JsPromise {

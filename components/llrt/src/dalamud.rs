@@ -1,6 +1,6 @@
+use log::info;
 use std::sync::Mutex;
 use std::time::Duration;
-use log::info;
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use tokio::time;
 use windows::Win32::Foundation::ERROR_PIPE_BUSY;
@@ -19,7 +19,7 @@ impl DalamudPipe {
         }
     }
 
-    pub(crate) async fn connect(&self) {
+    pub async fn connect(&self) {
         let pipe_name = self.pipe_name.to_owned();
 
         let client = loop {

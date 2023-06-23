@@ -4,8 +4,8 @@ use std::marker::PhantomData;
 
 #[derive(Clone)]
 pub struct JsObject {
-    pub(crate) engine: JsEngine,
-    pub(crate) handle: v8::Global<v8::Object>,
+    pub engine: JsEngine,
+    pub handle: v8::Global<v8::Object>,
 }
 
 impl JsObject {

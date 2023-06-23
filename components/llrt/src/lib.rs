@@ -62,7 +62,7 @@ fn setup_logging(dir: &PathBuf) {
 
     // log on panic
     std::panic::set_hook(Box::new(|info| {
-        let backtrace = std::backtrace::Backtrace::capture();
+        let backtrace = std::backtrace::Backtrace::force_capture();
 
         let thread = thread::current();
         let thread = thread.name().unwrap_or("<unnamed>");
@@ -77,7 +77,7 @@ fn setup_logging(dir: &PathBuf) {
         let formatted = match info.location() {
             Some(location) => {
                 format!(
-                    "thread '{}' panicked at '{}': {}:{}{:?}",
+                    "thread '{}' panicked at '{}': {}:{}\nbacktrace:\n{:?}",
                     thread,
                     msg,
                     location.file(),
@@ -85,7 +85,10 @@ fn setup_logging(dir: &PathBuf) {
                     backtrace
                 )
             }
-            None => format!("thread '{}' panicked at '{}'{:?}", thread, msg, backtrace),
+            None => format!(
+                "thread '{}' panicked at '{}'\nbacktrace:\n{:?}",
+                thread, msg, backtrace
+            ),
         };
 
         error!("{}", formatted);
@@ -172,6 +175,6 @@ async fn init_async() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
+pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {
     TOKIO_RT.get().unwrap()
 }
