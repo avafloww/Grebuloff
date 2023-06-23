@@ -540,6 +540,34 @@ mod tests {
     use std::time::Duration;
 
     #[test]
+    fn eval_nested() {
+        let engine = JsEngine::new();
+        engine
+            .global()
+            .set(
+                "ping",
+                engine.create_function(|inv| {
+                    println!("ping");
+                    Ok(inv.engine.eval::<&str, String>("pong()").unwrap())
+                }),
+            )
+            .unwrap();
+        engine
+            .global()
+            .set(
+                "pong",
+                engine.create_function(|_| {
+                    println!("pong");
+                    Ok("pong")
+                }),
+            )
+            .unwrap();
+
+        let eval = engine.eval::<&str, String>("ping()");
+        assert_eq!(eval.unwrap(), "pong");
+    }
+
+    #[test]
     fn eval_origin() {
         let engine = JsEngine::new();
         let result: StdString = engine
