@@ -1,12 +1,12 @@
 // largely copied from MiniV8: mini_v8.rs
 use super::*;
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::string::String as StdString;
 use std::sync::{Arc, Condvar, Mutex, Once};
 use std::thread;
 use std::time::Duration;
-use std::{any::Any, borrow::Cow};
 use std::{cell::RefCell, fmt};
 
 const CONTEXT_ID_STR: &str = "id";
@@ -105,36 +105,6 @@ impl JsEngine {
     pub fn get_context_id(&self) -> Option<ContextId> {
         self.interface
             .top(|entry| entry.get_slot::<ContextId>().cloned())
-    }
-
-    /// Inserts any sort of keyed value of type `T` into the `JsEngine`, typically for later retrieval
-    /// from within Rust functions called from within JavaScript. If a value already exists with the
-    /// key, it is returned.
-    pub fn set_user_data<K, T>(&self, key: K, data: T) -> Option<Box<dyn Any>>
-    where
-        K: ToString,
-        T: Any,
-    {
-        self.interface
-            .use_slot(|m: &AnyMap| m.0.borrow_mut().insert(key.to_string(), Box::new(data)))
-    }
-
-    /// Calls a function with a user data value by its key, or `None` if no value exists with the
-    /// key. If a value exists but it is not of the type `T`, `None` is returned. This is typically
-    /// used by a Rust function called from within JavaScript.
-    pub fn use_user_data<F, T: Any, U>(&self, key: &str, func: F) -> U
-    where
-        F: FnOnce(Option<&T>) -> U + 'static,
-    {
-        self.interface
-            .use_slot(|m: &AnyMap| func(m.0.borrow().get(key).and_then(|d| d.downcast_ref::<T>())))
-    }
-
-    /// Removes and returns a user data value by its key. Returns `None` if no value exists with the
-    /// key.
-    pub fn remove_user_data(&self, key: &str) -> Option<Box<dyn Any>> {
-        self.interface
-            .use_slot(|m: &AnyMap| m.0.borrow_mut().remove(key))
     }
 
     /// Creates and returns a string managed by V8.
@@ -385,13 +355,6 @@ impl Interface {
         self.0.borrow_mut().pop();
     }
 
-    fn use_slot<F, T: 'static, U>(&self, func: F) -> U
-    where
-        F: FnOnce(&T) -> U,
-    {
-        self.top(|entry| func(entry.get_slot().unwrap()))
-    }
-
     fn top<F, T>(&self, func: F) -> T
     where
         F: FnOnce(&mut InterfaceEntry) -> T,
@@ -470,13 +433,12 @@ fn init_isolate(isolate: &mut v8::Isolate, context_id: Option<ContextId>) {
     let context = v8::Context::new(scope);
     let scope = &mut v8::ContextScope::new(scope, context);
     let global_context = v8::Global::new(scope, context);
-    scope.set_slot(Global {
+    scope.set_slot::<Global>(Global {
         context: global_context,
     });
-    scope.set_slot(AnyMap(Rc::new(RefCell::new(BTreeMap::new()))));
 
-    if context_id.is_some() {
-        scope.set_slot(context_id);
+    if let Some(id) = context_id {
+        scope.set_slot::<ContextId>(id);
     }
 }
 
@@ -511,8 +473,6 @@ struct CallbackInfo {
     engine: JsEngine,
     callback: Callback,
 }
-
-struct AnyMap(Rc<RefCell<BTreeMap<StdString, Box<dyn Any>>>>);
 
 // A JavaScript script.
 #[derive(Clone, Debug, Default)]
