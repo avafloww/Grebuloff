@@ -1,5 +1,5 @@
 pub mod bindings;
-pub mod import;
+pub mod module;
 pub mod types;
 
 mod engine;
