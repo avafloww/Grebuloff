@@ -9,7 +9,9 @@ import { fileURLToPath } from 'url';
 import readline from 'readline';
 import events from 'events';
 
-const __dirname = path.resolve(path.join(path.dirname(fileURLToPath(import.meta.url)), '..'));
+const __dirname = path.resolve(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
+);
 
 // Versions
 const DOTNET_MIN_VERSION = '7';
@@ -27,7 +29,12 @@ const CS_RUST_DIR = path.join(CS_DIR, 'rust');
 const CS_GENERATED_FILE = path.join(CS_RUST_DIR, 'lib', 'src', 'generated.rs');
 
 const CS_EXPORTER_DIR = path.join(CS_RUST_DIR, 'exporter');
-const CS_EXPORTER_BIN_DIR = path.join(CS_EXPORTER_DIR, 'bin', 'Debug', 'net7.0');
+const CS_EXPORTER_BIN_DIR = path.join(
+  CS_EXPORTER_DIR,
+  'bin',
+  'Debug',
+  'net7.0',
+);
 const CS_EXPORTER_BIN = path.join(CS_EXPORTER_BIN_DIR, 'RustExporter.exe');
 
 // Project info
@@ -63,7 +70,7 @@ const PROJECTS = {
   dalamud: {
     type: 'dotnet',
     dir: path.join(COMPONENTS_DIR, 'dalamud'),
-  }
+  },
 };
 
 //
@@ -75,7 +82,10 @@ async function exec(cmd, extraOpts = {}) {
       console.log(`> ${cmd}`);
     }
 
-    let child = child_process.spawn(cmd, Object.assign({ shell: true }, extraOpts));
+    let child = child_process.spawn(
+      cmd,
+      Object.assign({ shell: true }, extraOpts),
+    );
 
     let output = '';
 
@@ -175,7 +185,9 @@ async function checkBuildTools() {
     await exec(`cargo --version`, { silent: true });
   } catch (e) {
     console.log(e);
-    console.error('cargo not found. Please ensure Rust is installed and cargo is in your path.');
+    console.error(
+      'cargo not found. Please ensure Rust is installed and cargo is in your path.',
+    );
     return false;
   }
 
@@ -185,16 +197,22 @@ async function checkBuildTools() {
     rustcVersion = rustcVersion.split(' ')[1];
     console.log(`Found rustc ${rustcVersion}`);
     if (!checkMinVersion(rustcVersion, RUST_MIN_VERSION)) {
-      console.error(`Rust nightly ${RUST_MIN_VERSION} or higher is required (found ${rustcVersion}). Please install the latest Rust nightly toolchain.`);
+      console.error(
+        `Rust nightly ${RUST_MIN_VERSION} or higher is required (found ${rustcVersion}). Please install the latest Rust nightly toolchain.`,
+      );
       return false;
     }
 
     if (!rustcVersion.endsWith('-nightly')) {
-      console.error(`Rust nightly is required. Please switch to a nightly toolchain.`);
+      console.error(
+        `Rust nightly is required. Please switch to a nightly toolchain.`,
+      );
       return false;
     }
   } catch (e) {
-    console.error('rustc not found. Please ensure Rust is installed and rustc is in your path.');
+    console.error(
+      'rustc not found. Please ensure Rust is installed and rustc is in your path.',
+    );
     return false;
   }
 
@@ -203,11 +221,15 @@ async function checkBuildTools() {
     const dotnetVersion = await exec(`dotnet --version`, { silent: true });
     console.log(`Found .NET ${dotnetVersion}`);
     if (!checkMinVersion(dotnetVersion, DOTNET_MIN_VERSION)) {
-      console.error(`.NET 7 or higher is required (found ${dotnetVersion}). Please install the latest .NET SDK.`);
+      console.error(
+        `.NET 7 or higher is required (found ${dotnetVersion}). Please install the latest .NET SDK.`,
+      );
       return false;
     }
   } catch (e) {
-    console.error(`.NET 7 or higher is required. Please install the latest .NET SDK.`);
+    console.error(
+      `.NET 7 or higher is required. Please install the latest .NET SDK.`,
+    );
     return false;
   }
 
@@ -249,7 +271,10 @@ async function shouldBuildClientStructs() {
   }
 
   // otherwise, only rebuild if the CS rev is different
-  const gitRev = await exec(`git describe --always`, { cwd: CS_DIR, silent: true });
+  const gitRev = await exec(`git describe --always`, {
+    cwd: CS_DIR,
+    silent: true,
+  });
 
   return rev.trim() !== gitRev.trim();
 }
@@ -261,19 +286,29 @@ async function ensureArtifacts() {
     }
 
     if (!fs.existsSync(meta.artifact)) {
-      console.error(`${project} artifact not found. Please execute:`);
-      console.error(`  boneless build ${project}`);
+      console.error(`${name} artifact not found. Please execute:`);
+      console.error(`  boneless build ${name}`);
       return false;
     }
 
     return true;
   });
 
-  return result.filter(x => !x).length === 0;
+  return result.filter((x) => !x).length === 0;
 }
 
 function showHelp() {
-  const terms = ['janky', 'hacky', 'shitty', 'half-assed', 'half-baked', 'organic', 'artisanal', 'tasty', 'undercooked'];
+  const terms = [
+    'janky',
+    'hacky',
+    'shitty',
+    'half-assed',
+    'half-baked',
+    'organic',
+    'artisanal',
+    'tasty',
+    'undercooked',
+  ];
   const term = terms[Math.floor(Math.random() * terms.length)];
 
   console.log();
@@ -293,9 +328,13 @@ function showHelp() {
   console.log();
   console.log('Run usage:\tboneless <run task> [options]');
   console.log('Run tasks:');
-  console.log('  set-path\tSets the path to ffxiv_dx11.exe in ~/.bonelessrc.json. Run this first!');
+  console.log(
+    '  set-path\tSets the path to ffxiv_dx11.exe in ~/.bonelessrc.json. Run this first!',
+  );
   console.log('  launch\tFake-launch the game and inject Grebuloff');
-  console.log('  inject\tInject Grebuloff into a running game (must have ACLs modified)');
+  console.log(
+    '  inject\tInject Grebuloff into a running game (must have ACLs modified)',
+  );
 
   process.exit(1);
 }
@@ -344,7 +383,7 @@ switch (operation) {
 //
 if (opType === 'build') {
   // check build tools
-  if (!await checkBuildTools()) {
+  if (!(await checkBuildTools())) {
     process.exit(2);
   }
 
@@ -377,7 +416,7 @@ if (opType === 'build') {
       if (meta.required) {
         targets.push(name);
       }
-    })
+    });
   }
 
   //
@@ -436,6 +475,14 @@ if (opType === 'build') {
           console.log(`Building Rust project: ${name}...`);
           await execFor(name, 'cargo build');
           await copyArtifact(path.join('target', 'debug', 'grebuloff*'));
+          await copyArtifact(
+            path.join(
+              'target',
+              'x86_64-pc-windows-msvc',
+              'debug',
+              'grebuloff*',
+            ),
+          );
           break;
         case 'dotnet':
           console.log(`Building .NET project: ${name}...`);
@@ -480,7 +527,9 @@ if (opType === 'build') {
         throw 'deez';
       }
     } catch (e) {
-      console.error('Game path not set. Run `boneless set-path <path-to-ffxiv_dx11.exe>` first.');
+      console.error(
+        'Game path not set. Run `boneless set-path <path-to-ffxiv_dx11.exe>` first.',
+      );
       process.exit(3);
     }
 
@@ -491,15 +540,17 @@ if (opType === 'build') {
     }
 
     // ensure the injector and runtime are built
-    if (!await ensureArtifacts()) {
+    if (!(await ensureArtifacts())) {
       process.exit(4);
     }
 
     // launch the injector
-    await exec(`${PROJECTS.injector.artifact} launch --game-path "${gamePath}"`);
+    await exec(
+      `${PROJECTS.injector.artifact} launch --game-path "${gamePath}"`,
+    );
   } else if (operation === 'inject') {
     // ensure the injector and runtime are built
-    if (!await ensureArtifacts()) {
+    if (!(await ensureArtifacts())) {
       process.exit(4);
     }
 
