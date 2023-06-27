@@ -35,8 +35,3 @@ pub fn libhlrt_js_files(_item: proc_macro::TokenStream) -> proc_macro::TokenStre
     }
     .into()
 }
-
-#[proc_macro]
-pub fn libhlrt_esm_main(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    quote! { "libhlrt/init.js" }.into()
-}

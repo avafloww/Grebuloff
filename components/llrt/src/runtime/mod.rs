@@ -4,10 +4,10 @@ mod ops;
 use crate::get_tokio_rt;
 use crate::runtime::module::RuntimeModuleLoader;
 use anyhow::Result;
-use deno_core::{include_js_files, Extension, JsRuntime, RuntimeOptions};
-use grebuloff_macros::{libhlrt_esm_files, libhlrt_esm_main};
+use deno_core::{Extension, JsRuntime, RuntimeOptions};
+use grebuloff_macros::libhlrt_js_files;
 use log::{debug, info};
-use std::{path::Path, rc::Rc};
+use std::rc::Rc;
 use std::{path::PathBuf, thread};
 use tokio::sync::{watch, OnceCell};
 
