@@ -5,7 +5,7 @@ mod runtime;
 
 use crate::dalamud::DalamudPipe;
 use crate::resolvers::init_resolvers;
-use crate::runtime::init_hlrt_context;
+use crate::runtime::init_hlrt;
 // use crate::webview::WebView;
 use anyhow::Result;
 use log::{error, info};
@@ -132,8 +132,8 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
         "Grebuloff Low-Level Runtime starting (load method: {:?})",
         get_load_method()
     );
-    info!("Build time: {}", env!("VERGEN_BUILD_TIMESTAMP"));
-    info!("Git commit: {}", env!("VERGEN_GIT_DESCRIBE"));
+    info!("Build time: {}", env!("BUILD_TIMESTAMP"));
+    info!("Git commit: {}", env!("GIT_DESCRIBE"));
 
     // start attempting connection to the Dalamud pipe, if applicable
     if let Some(pipe) = DALAMUD_PIPE.get() {
@@ -147,7 +147,7 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
         .expect("failed to init resolvers");
 
     // core js runtime
-    init_hlrt_context(&runtime_dir)
+    init_hlrt(&runtime_dir)
         .await
         .expect("failed to init core runtime");
 

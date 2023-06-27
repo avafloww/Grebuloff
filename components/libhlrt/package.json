@@ -3,11 +3,10 @@
   "description": "Grebuloff high-level runtime library",
   "version": "0.0.0",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/init.js",
   "scripts": {
-    "clean": "rimraf dist ../../build/libhlrt/",
-    "build": "tsc && mkdirp ../../build/libhlrt && ncp package.json ../../build/libhlrt/package.json && ncp dist ../../build/libhlrt/dist"
+    "clean": "pnpm rimraf dist ../../build/libhlrt/",
+    "build": "pnpm tsc && pnpm mkdirp ../../build/libhlrt && pnpm ncp package.json ../../build/libhlrt/package.json && pnpm ncp dist ../../build/libhlrt/dist"
   },
   "devDependencies": {
     "mkdirp": "^3.0.1",

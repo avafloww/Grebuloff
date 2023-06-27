@@ -1,23 +1,31 @@
-use std::error::Error;
-use vergen::EmitBuilder;
+use std::{error::Error, process::Command};
 
 const LIBHLRT_BASE: &str = "../build/libhlrt/dist";
 
-fn emit_build_meta() -> Result<(), Box<dyn Error>> {
-    EmitBuilder::builder()
-        .build_timestamp()
-        .git_describe(true, true, None)
-        .emit()?;
+struct Meta;
+impl Meta {
+    fn version() {
+        let out = Command::new("git")
+            .arg("describe")
+            .arg("--always")
+            .arg("--dirty")
+            .output()
+            .unwrap();
+        println!(
+            "cargo:rustc-env=GIT_DESCRIBE={}",
+            String::from_utf8(out.stdout).unwrap()
+        );
+    }
 
-    Ok(())
+    fn timestamp() {
+        let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        println!("cargo:rustc-env=BUILD_TIMESTAMP={}", timestamp);
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Rerun if libhlrt changes, so we can regenerate the snapshot
-    println!("cargo:rerun-if-changed={}", LIBHLRT_BASE);
-
-    // Emit build metadata
-    emit_build_meta()?;
+    Meta::version();
+    Meta::timestamp();
 
     Ok(())
 }
