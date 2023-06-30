@@ -4,11 +4,12 @@ use ffxiv_client_structs::{
 };
 use grebuloff_macros::{function_hook, function_hook_for, vtable_functions, VTable};
 use log::{debug, info, trace};
+use windows::Win32::Graphics::Dxgi::{IDXGISwapChain, IDXGISwapChain_Vtbl};
 
 #[derive(VTable)]
 struct ResolvedSwapChain {
     #[vtable_base]
-    base: *mut SwapChain,
+    base: *mut IDXGISwapChain_Vtbl,
 }
 
 vtable_functions!(impl ResolvedSwapChain {
@@ -29,9 +30,7 @@ vtable_functions!(impl ResolvedSwapChain {
 unsafe fn resolve_swap_chain() -> ResolvedSwapChain {
     debug!("resolving swap chain");
     let device = loop {
-        let device = std::ptr::read(
-            ffxiv_client_structs::address::get::<Device_Fn_Instance>() as *const *mut Device
-        );
+        let device = ffxiv_client_structs::address::get::<Device_Fn_Instance>() as *mut Device;
 
         if device.is_null() {
             trace!("device is null, waiting");
@@ -45,10 +44,12 @@ unsafe fn resolve_swap_chain() -> ResolvedSwapChain {
     debug!("device: {:p}", device);
     let swap_chain = (*device).swap_chain;
     debug!("swap chain: {:p}", swap_chain);
-    let dxgi_swap_chain = (*swap_chain).dxgiswap_chain;
-    debug!("dxgi swap chain: {:p}", dxgi_swap_chain);
+    let dxgi_swap_chain = (*swap_chain).dxgiswap_chain as *mut *mut IDXGISwapChain;
+    debug!("dxgi swap chain: {:p}", *dxgi_swap_chain);
 
-    let resolved = ResolvedSwapChain { base: swap_chain };
+    let resolved = ResolvedSwapChain {
+        base: *dxgi_swap_chain as *mut IDXGISwapChain_Vtbl,
+    };
     resolved
 }
 
@@ -65,16 +66,19 @@ pub unsafe fn hook_swap_chain() {
 
     ///Auto-generated function hook.
     struct __FunctionHook__detour {
-        hook: retour::RawDetour,
+        hook: std::mem::ManuallyDrop<retour::RawDetour>,
         closure: *mut dyn Fn(u32, u32) -> (),
     }
-    unsafe extern "C" fn detourfn(sync_interval: u32, present_flags: u32) -> () {
+    unsafe extern "C" fn detourfn(
+        this: *mut IDXGISwapChain,
+        sync_interval: u32,
+        present_flags: u32,
+    ) -> () {
         info!(
             "present detour: sync_interval: {}, present_flags: {}",
             sync_interval, present_flags
         );
         log::logger().flush();
-        std::thread::sleep_ms(5000);
     }
     impl __FunctionHook__detour {
         unsafe fn new(orig_address: *const usize) -> Self {
@@ -112,8 +116,8 @@ pub unsafe fn hook_swap_chain() {
             obj_closure_ptr.write(closure);
 
             let hook =
-                retour::RawDetour::new(orig_address as *const (), detourfn as *const ()).unwrap();
-            std::ptr::addr_of_mut!((*obj_ptr).hook).write(hook);
+                retour::RawDetour::new(*orig_address as *const (), detourfn as *const ()).unwrap();
+            std::ptr::addr_of_mut!((*obj_ptr).hook).write(std::mem::ManuallyDrop::new(hook));
 
             obj.assume_init()
         }
