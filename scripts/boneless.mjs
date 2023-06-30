@@ -6,8 +6,6 @@ import child_process from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import readline from 'readline';
-import events from 'events';
 
 const __dirname = path.resolve(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
@@ -24,21 +22,17 @@ const RC_FILE = path.join(USER_HOME, '.bonelessrc.json');
 const COMPONENTS_DIR = path.join(__dirname, 'components');
 const OUTPUT_DIR = path.join(__dirname, 'build');
 
-const CS_DIR = path.join(__dirname, 'deps', 'FFXIVClientStructs');
-const CS_RUST_DIR = path.join(CS_DIR, 'rust');
-const CS_GENERATED_FILE = path.join(CS_RUST_DIR, 'lib', 'src', 'generated.rs');
-
-const CS_EXPORTER_DIR = path.join(CS_RUST_DIR, 'exporter');
-const CS_EXPORTER_BIN_DIR = path.join(
-  CS_EXPORTER_DIR,
-  'bin',
-  'Debug',
-  'net7.0',
-);
-const CS_EXPORTER_BIN = path.join(CS_EXPORTER_BIN_DIR, 'RustExporter.exe');
+const CS_RUST_DIR = path.join(__dirname, 'deps', 'FFXIVClientStructs', 'rust');
 
 // Project info
 const PROJECTS = {
+  cs: {
+    type: 'rust',
+    description: 'FFXIVClientStructs Rust bindings',
+    dir: CS_RUST_DIR,
+    required: true,
+    runTests: true,
+  },
   injector: {
     type: 'rust',
     dir: path.join(COMPONENTS_DIR, 'injector'),
@@ -47,28 +41,33 @@ const PROJECTS = {
   },
   llrt: {
     type: 'rust',
+    description: 'Low-Level Runtime (LLRT)',
     dir: path.join(COMPONENTS_DIR, 'llrt'),
     artifact: path.join(OUTPUT_DIR, 'grebuloff_llrt.dll'),
     required: true,
   },
   libhlrt: {
     type: 'js',
+    description: 'High-Level Runtime Library (libhlrt)',
     dir: path.join(COMPONENTS_DIR, 'libhlrt'),
     artifact: path.join(OUTPUT_DIR, 'libhlrt'),
     required: true,
   },
   hlrt: {
     type: 'js',
+    description: 'High-Level Runtime (hlrt)',
     dir: path.join(COMPONENTS_DIR, 'hlrt'),
     artifact: path.join(OUTPUT_DIR, 'hlrt'),
     required: true,
   },
   ui: {
     type: 'js',
+    description: 'user interface',
     dir: path.join(COMPONENTS_DIR, 'ui'),
   },
   dalamud: {
     type: 'dotnet',
+    description: 'Dalamud helper plugin',
     dir: path.join(COMPONENTS_DIR, 'dalamud'),
   },
 };
@@ -76,13 +75,9 @@ const PROJECTS = {
 //
 // Utility functions
 //
-async function exec(cmd, extraOpts = {}) {
+async function execGet(cmd, extraOpts = {}) {
   return new Promise((resolve, reject) => {
-    if (!extraOpts.silent) {
-      console.log(`> ${cmd}`);
-    }
-
-    let child = child_process.spawn(
+    const child = child_process.spawn(
       cmd,
       Object.assign({ shell: true }, extraOpts),
     );
@@ -92,10 +87,6 @@ async function exec(cmd, extraOpts = {}) {
     function recv(data) {
       let str = data.toString();
       output += str;
-
-      if (!extraOpts.silent) {
-        process.stdout.write(str);
-      }
     }
 
     child.stdout.on('data', recv);
@@ -103,7 +94,6 @@ async function exec(cmd, extraOpts = {}) {
 
     child.on('close', (code) => {
       if (code === 0) {
-        if (!extraOpts.silent) console.log(); // newline for cleanliness
         resolve(output);
       } else {
         reject(`Process exited with code ${code}`);
@@ -112,7 +102,24 @@ async function exec(cmd, extraOpts = {}) {
   });
 }
 
-async function withProjects(fn, projects = Object.keys(PROJECTS)) {
+async function exec(cmd, extraOpts = {}) {
+  return new Promise((resolve, reject) => {
+    const child = child_process.spawn(
+      cmd,
+      Object.assign({ shell: true, stdio: 'inherit' }, extraOpts),
+    );
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(`Process exited with code ${code}`);
+      }
+    });
+  });
+}
+
+async function withProjects(func, projects = Object.keys(PROJECTS)) {
   if (typeof projects === 'string') {
     projects = [projects];
   }
@@ -120,7 +127,7 @@ async function withProjects(fn, projects = Object.keys(PROJECTS)) {
   let ret = [];
   for (const p of projects) {
     const meta = PROJECTS[p];
-    let pret = fn(p, meta);
+    let pret = func(p, meta);
     if (pret !== undefined) {
       if (pret instanceof Promise) {
         await pret;
@@ -182,7 +189,7 @@ function checkMinVersion(version, minVersion) {
 async function checkBuildTools() {
   // cargo
   try {
-    await exec(`cargo --version`, { silent: true });
+    await execGet(`cargo --version`);
   } catch (e) {
     console.log(e);
     console.error(
@@ -193,7 +200,7 @@ async function checkBuildTools() {
 
   // rustc
   try {
-    let rustcVersion = await exec(`rustc --version`, { silent: true });
+    let rustcVersion = await execGet(`rustc --version`);
     rustcVersion = rustcVersion.split(' ')[1];
     console.log(`Found rustc ${rustcVersion}`);
     if (!checkMinVersion(rustcVersion, RUST_MIN_VERSION)) {
@@ -218,7 +225,7 @@ async function checkBuildTools() {
 
   // .NET
   try {
-    const dotnetVersion = await exec(`dotnet --version`, { silent: true });
+    const dotnetVersion = await execGet(`dotnet --version`);
     console.log(`Found .NET ${dotnetVersion}`);
     if (!checkMinVersion(dotnetVersion, DOTNET_MIN_VERSION)) {
       console.error(
@@ -235,48 +242,13 @@ async function checkBuildTools() {
 
   // check for pnpm
   try {
-    await exec(`pnpm --version`, { silent: true });
+    await execGet(`pnpm --version`);
   } catch (e) {
     console.error('pnpm not found. Please install pnpm.');
     return false;
   }
 
   return true;
-}
-
-async function shouldBuildClientStructs() {
-  if (!fs.existsSync(CS_EXPORTER_BIN) || !fs.existsSync(CS_GENERATED_FILE)) {
-    return true;
-  }
-
-  // check the first line only, generated.rs is huge...
-  const rl = readline.createInterface({
-    input: fs.createReadStream(CS_GENERATED_FILE),
-    crlfDelay: Infinity,
-  });
-
-  const [line] = await events.once(rl, 'line');
-  rl.close();
-
-  // always rebuild if the rev line is missing
-  if (!line.startsWith('// rev: ')) {
-    return true;
-  }
-
-  const rev = line.substring(8);
-
-  // always rebuild if the working tree was dirty when the file was generated
-  if (rev.endsWith('-dirty')) {
-    return true;
-  }
-
-  // otherwise, only rebuild if the CS rev is different
-  const gitRev = await exec(`git describe --always`, {
-    cwd: CS_DIR,
-    silent: true,
-  });
-
-  return rev.trim() !== gitRev.trim();
 }
 
 async function ensureArtifacts() {
@@ -297,7 +269,7 @@ async function ensureArtifacts() {
   return result.filter((x) => !x).length === 0;
 }
 
-function showHelp() {
+async function showHelp() {
   const terms = [
     'janky',
     'hacky',
@@ -321,9 +293,9 @@ function showHelp() {
   console.log('  rebuild\tClean and rebuild the project');
   console.log('Targets for build tasks:');
   console.log('  all\t\tBuild everything (default)');
-  withProjects((name, meta) => {
+  await withProjects((name, meta) => {
     const tabs = name.length < 7 ? '\t\t' : '\t';
-    console.log(`  ${name}${tabs}Build ${project}`);
+    console.log(`  ${name}${tabs}Build ${meta.description ?? name}`);
   });
   console.log();
   console.log('Run usage:\tboneless <run task> [options]');
@@ -335,8 +307,6 @@ function showHelp() {
   console.log(
     '  inject\tInject Grebuloff into a running game (must have ACLs modified)',
   );
-
-  process.exit(1);
 }
 
 //
@@ -374,7 +344,7 @@ switch (operation) {
   default:
     console.error(`Unknown operation ${operation}`);
   case null:
-    showHelp();
+    await showHelp();
     process.exit(1);
 }
 
@@ -412,7 +382,7 @@ if (opType === 'build') {
 
   if (targets.length === 0) {
     // collect `required` targets
-    withProjects((name, meta) => {
+    await withProjects((name, meta) => {
       if (meta.required) {
         targets.push(name);
       }
@@ -439,10 +409,6 @@ if (opType === 'build') {
 
     await exec(`cargo clean`, { cwd: CS_RUST_DIR });
     await exec(`dotnet clean`, { cwd: CS_EXPORTER_DIR });
-
-    if (fs.existsSync(CS_GENERATED_FILE)) {
-      fs.unlinkSync(CS_GENERATED_FILE);
-    }
   }
 
   //
@@ -455,17 +421,8 @@ if (opType === 'build') {
       await exec(`git submodule update --init --recursive`);
     }
 
-    // ensure we have exported structs
-    if (await shouldBuildClientStructs()) {
-      console.log('Building FFXIVClientStructs/RustExporter...');
-      await exec(`dotnet build -c Debug`, { cwd: CS_EXPORTER_DIR });
-
-      console.log('Running FFXIVClientStructs/RustExporter...');
-      await exec(CS_EXPORTER_BIN, { cwd: CS_EXPORTER_BIN_DIR });
-    }
-
     // build components
-    withProjects(async (name, meta) => {
+    await withProjects(async (name, meta) => {
       switch (meta.type) {
         case 'js':
           console.log(`Building JS project: ${name}...`);
@@ -474,6 +431,10 @@ if (opType === 'build') {
         case 'rust':
           console.log(`Building Rust project: ${name}...`);
           await execFor(name, 'cargo build');
+          if (meta.runTests) {
+            console.log(`Running tests for ${name}...`);
+            await execFor(name, 'cargo test');
+          }
           await copyArtifact(path.join('target', 'debug', 'grebuloff*'));
           await copyArtifact(
             path.join(

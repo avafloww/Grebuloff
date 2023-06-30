@@ -1,6 +1,6 @@
 .bonelessrc.json
 
-gameConfig/
+deps/cef-sys/cef_binary*
 local/
 dist/
 build/

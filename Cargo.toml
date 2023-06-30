@@ -1,7 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
+    "deps/cef-sys",
     "components/macros",
     "components/injector",
     "components/llrt",
+]
+exclude = [
+    "deps/FFXIVClientStructs"
 ]

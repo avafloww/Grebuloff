@@ -1,6 +1,6 @@
 #![allow(unsafe_code)]
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use dll_syringe::{process::OwnedProcess, Syringe};
 use std::os::windows::io::FromRawHandle;
 use std::path::PathBuf;
@@ -31,8 +31,19 @@ use windows::{
     },
 };
 
+const DEFAULT_INJECTION_DELAY: u64 = 3000;
+
 #[derive(Parser)]
-enum Args {
+struct Args {
+    #[clap(subcommand)]
+    command: Commands,
+
+    #[clap(short = 'I', long)]
+    injection_delay: Option<u64>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
     Launch {
         #[clap(short, long)]
         game_path: PathBuf,
@@ -249,11 +260,11 @@ fn main() {
 
     let process_info;
 
-    match args {
-        Args::Launch { game_path } => {
+    match args.command {
+        Commands::Launch { game_path } => {
             process_info = unsafe { spawn_game_process(game_path) };
         }
-        Args::Inject => {
+        Commands::Inject => {
             process_info = ProcessInfo {
                 pid: await_game_process(),
                 process_handle: HANDLE(0),
@@ -295,6 +306,20 @@ fn main() {
                 copy_acl_from_self_to_target(process_info.process_handle);
             }
         }
+    }
+
+    let injection_delay = std::time::Duration::from_millis(
+        args.injection_delay
+            .unwrap_or(DEFAULT_INJECTION_DELAY)
+            .clamp(0, 60000),
+    );
+
+    if !injection_delay.is_zero() {
+        println!(
+            "waiting {}ms before injecting...",
+            injection_delay.as_millis()
+        );
+        std::thread::sleep(injection_delay);
     }
 
     println!("injecting...");

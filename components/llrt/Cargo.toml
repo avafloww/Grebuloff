@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 grebuloff-macros = { path = "../macros" }
-ffxivclientstructs = { path = "../../deps/FFXIVClientStructs/rust/lib", features = ["async-resolution"] }
+ffxiv_client_structs = { path = "../../deps/FFXIVClientStructs/rust/lib", features = ["async-resolution"] }
 dll-syringe = { version = "0.15.2", default-features = false, features = ["payload-utils"] }
 msgbox = "0.7.0"
 log = "0.4"
@@ -20,7 +20,6 @@ rmp = "0.8.11"
 rmp-serde = "1.1.1"
 serde = { version = "1.0.163", features = ["derive"] }
 windows = { version = "0.48.0", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_System_ProcessStatus"] }
-webview2-com = "0.25.0"
 serde_json = "1.0.96"
 anyhow = "1.0.71"
 include_dir = "0.7.3"
@@ -29,6 +28,9 @@ inventory = "0.3.6"
 itertools = "0.10.5"
 rustc-hash = "1.1.0"
 deno_core = "0.191.0"
+retour = "0.3.0"
+cef-sys = { path = "../../deps/cef-sys" }
+iced-x86 = "1.19.0"
 
 [build-dependencies]
 chrono = "0.4.26"

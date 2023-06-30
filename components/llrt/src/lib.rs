@@ -1,19 +1,16 @@
 mod dalamud;
+mod hooking;
 mod resolvers;
 mod runtime;
-// mod webview;
 
 use crate::dalamud::DalamudPipe;
-use crate::resolvers::init_resolvers;
-use crate::runtime::init_hlrt;
-// use crate::webview::WebView;
 use anyhow::Result;
-use log::{error, info};
+use log::{error, info, trace};
 use msgbox::IconType;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::thread;
-use tokio::task;
+use tokio::{task, time};
 
 static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static DALAMUD_PIPE: OnceLock<DalamudPipe> = OnceLock::new();
@@ -142,14 +139,17 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
 
     // handle anything that needs to be loaded sync first
     // resolve clientstructs
-    unsafe { init_resolvers(get_load_method()) }
+    unsafe { resolvers::init_resolvers(get_load_method()) }
         .await
         .expect("failed to init resolvers");
 
+    // core hooks
+    unsafe { hooking::init_hooks() };
+
     // core js runtime
-    init_hlrt(&runtime_dir)
-        .await
-        .expect("failed to init core runtime");
+    // runtime::init_hlrt(&runtime_dir)
+    //     .await
+    //     .expect("failed to init core runtime");
 
     // call async init now
     task::spawn(init_async());
@@ -171,6 +171,15 @@ async fn init_async() -> Result<()> {
     //     webview.run().unwrap();
     // })
     // .await?;
+
+    // run the main loop
+    // this is the last thing that should be called in init_async
+    let mut interval = time::interval(time::Duration::from_millis(1000));
+
+    loop {
+        interval.tick().await;
+        trace!("in main loop");
+    }
 
     Ok(())
 }
