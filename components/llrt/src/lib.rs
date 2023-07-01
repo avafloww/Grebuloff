@@ -144,7 +144,7 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
         .expect("failed to init resolvers");
 
     // core hooks
-    unsafe { hooking::init_hooks() };
+    unsafe { hooking::init_hooks() }.expect("failed to init hooks");
 
     // core js runtime
     // runtime::init_hlrt(&runtime_dir)
@@ -179,6 +179,7 @@ async fn init_async() -> Result<()> {
     loop {
         interval.tick().await;
         trace!("in main loop");
+        hooking::HookManager::instance().dump_hooks();
     }
 
     Ok(())

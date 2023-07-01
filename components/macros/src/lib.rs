@@ -70,17 +70,17 @@ pub fn derive_vtable(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         impl #struct_name {
             fn address_table(&self) -> #addr_table_name {
                 #addr_table_name {
-                    base: self.#vtable_base as *const usize,
+                    base: self.#vtable_base as *const (),
                 }
             }
 
-            fn vtable_base(&self) -> *const usize {
-                self.#vtable_base as *const usize
+            fn vtable_base(&self) -> *const () {
+                self.#vtable_base as *const ()
             }
         }
 
         struct #addr_table_name {
-            base: *const usize,
+            base: *const (),
         }
     }
     .into()
@@ -165,8 +165,8 @@ pub fn vtable_functions(input: proc_macro::TokenStream) -> proc_macro::TokenStre
                 output_addrs = quote! {
                     #output_addrs
 
-                    fn #fn_name (&self) -> *const usize {
-                        unsafe { self.base.add(#vtable_index) }
+                    fn #fn_name (&self) -> *const *const () {
+                        unsafe { (self.base as *const usize).add(#vtable_index) as *const *const () }
                     }
                 };
 
@@ -201,67 +201,16 @@ pub fn vtable_functions(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     .into()
 }
 
-/*
-usage:
-
-register_function_hook!(resolve_swap_chain().address_table().present(), detour);
-
-#[function_hook]
-fn detour(&self, a: u32, b: u32) -> f64 {
-    println!("detour: {}, {}", a, b);
-    self.original(a, b) + 1
-}
-
-
-becomes:
-
-struct PresentDetour {
-    hook: MaybeUninit<GenericDetour<fn(u32, u32) -> f64>>,
-}
-
-impl PresentDetour {
-    type DetourFn = fn(u32, u32) -> ();
-
-    unsafe fn new() -> Self {}
-
-    unsafe extern "C" fn detour(&self, sync_interval: u32, present_flags: u32) -> f64 {
-        println!("detour: {}, {}", a, b);
-        self.original(a, b) + 1
-    }
-
-    unsafe fn original(&self, sync_interval: u32, present_flags: u32) -> f64 {
-        self.hook.assume_init()(sync_interval, present_flags)
-    }
-}
-
-impl FunctionHook for PresentDetour {
-    unsafe fn enable(&mut self) {
-        self.detour.enable().unwrap();
-    }
-
-    unsafe fn disable(&mut self) {
-        self.detour.disable().unwrap();
-    }
-}
-
-*/
-
-fn function_hook_name(name: String) -> Ident {
-    format_ident!("__FunctionHook__{}", name)
-}
-
 #[proc_macro_attribute]
 pub fn function_hook(
-    attr: proc_macro::TokenStream,
+    _attr: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let impl_fn = syn::parse_macro_input!(input as ItemFn);
 
-    // attr can optionally be a literal string, which is used as a hook description in logs
-    let fn_description = syn::parse_macro_input!(attr as Option<syn::LitStr>);
-
     let fn_name = impl_fn.sig.ident;
-    let struct_name = function_hook_name(fn_name.to_string());
+    let hook_name = format_ident!("__hook__{}", fn_name);
+    let detour_name = format_ident!("__detour__{}", fn_name);
 
     // ensure the function is marked as unsafe
     if impl_fn.sig.unsafety.is_none() {
@@ -309,76 +258,49 @@ pub fn function_hook(
     };
     let fn_body = impl_fn.block.stmts;
 
-    let log_name = fn_description
-        .as_ref()
-        .map(|s| s.value())
-        .unwrap_or_else(|| fn_name.to_string());
-    let create_msg = format!("[hook] create: {}", log_name);
-    let enable_msg = format!("[hook] enable: {}", log_name);
-    let disable_msg = format!("[hook] disable: {}", log_name);
-
     quote! {
         #[doc = "Auto-generated function hook."]
         #(#doc)*
-        struct #struct_name {
-            hook: retour::GenericDetour<#fn_type>,
+        #[allow(non_upper_case_globals)]
+        static_detour! {
+            static #hook_name: unsafe extern "C" #fn_type;
         }
 
-        impl #struct_name {
-            unsafe fn new(orig_address: *const usize) -> Self {
-                let mut obj: std::mem::MaybeUninit<Self> = std::mem::MaybeUninit::uninit();
-                let obj_ptr = obj.as_mut_ptr();
-
-                log::trace!(#create_msg);
-                let hook = retour::GenericDetour::<#fn_type>::new(
-                    std::mem::transmute(orig_address),
-                    std::mem::transmute(std::ptr::addr_of_mut!((*obj_ptr).detour)),
-                )
-                .unwrap();
-                std::ptr::addr_of_mut!((*obj_ptr).hook).write(hook);
-
-                obj.assume_init()
-            }
-
-            unsafe extern "C" fn detour(#(#args_input),*) -> #return_type {
+        #[doc = "Auto-generated function hook."]
+        #[doc = ""]
+        #(#doc)*
+        #[doc = "# Safety"]
+        #[doc = "This function is unsafe and should be treated as such, despite its lack of an `unsafe` keyword."]
+        #[doc = "This function should not be called outside of hooked native game code."]
+        #[allow(non_snake_case)]
+        fn #detour_name (#(#args_input),*) -> #return_type {
+            // wrap everything in an unsafe block here
+            // we can't easily pass an unsafe function to initialize otherwise, since we would
+            // have to wrap it in a closure, which would require knowing the closure signature,
+            // which we don't know at compile time/from a proc macro, at least not easily
+            let original = &#hook_name;
+            unsafe {
                 #(#fn_body)*
-            }
-
-            unsafe fn original(#(#args_input),*) -> #return_type {
-                self.hook.call(#(#args_named),*)
-            }
-        }
-
-        impl FunctionHook for #struct_name {
-            unsafe fn enable(&mut self) {
-                log::debug!(#enable_msg);
-                self.hook.enable().unwrap();
-            }
-
-            unsafe fn disable(&mut self) {
-                log::debug!(#disable_msg);
-                self.hook.disable().unwrap();
             }
         }
     }
     .into()
 }
 
-/*
-usage:
-function_hook_for!(detour)::new(resolve_swap_chain().address_table().present());
-
-
-result:
-__FunctionHook__detour::new(resolve_swap_chain().address_table().present());
- */
 #[proc_macro]
-pub fn function_hook_for(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn __fn_hook_symbol(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let fn_name = syn::parse_macro_input!(input as Ident);
-    let struct_name = function_hook_name(fn_name.to_string());
 
-    quote! {
-        #struct_name
-    }
-    .into()
+    let sym = format_ident!("__hook__{}", fn_name);
+
+    quote! { #sym }.into()
+}
+
+#[proc_macro]
+pub fn __fn_detour_symbol(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let fn_name = syn::parse_macro_input!(input as Ident);
+
+    let sym = format_ident!("__detour__{}", fn_name);
+
+    quote! { #sym }.into()
 }
