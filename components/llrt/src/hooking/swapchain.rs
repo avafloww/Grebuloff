@@ -5,7 +5,6 @@ use ffxiv_client_structs::generated::ffxiv::client::graphics::kernel::{
 };
 use grebuloff_macros::{function_hook, vtable_functions, VTable};
 use log::{debug, trace};
-use retour::static_detour;
 use std::ffi::c_void;
 
 #[derive(VTable)]

@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 grebuloff-macros = { path = "../macros" }
 ffxiv_client_structs = { path = "../../deps/FFXIVClientStructs/rust/lib", features = ["async-resolution"] }
+ffxiv_client_structs_macros = { path = "../../deps/FFXIVClientStructs/rust/macros" }
 dll-syringe = { version = "0.15.2", default-features = false, features = ["payload-utils"] }
 msgbox = "0.7.0"
 log = "0.4"

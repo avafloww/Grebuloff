@@ -1088,6 +1088,7 @@ dependencies = [
  "dll-syringe",
  "fern",
  "ffxiv_client_structs",
+ "ffxiv_client_structs_macros",
  "grebuloff-macros",
  "include_dir",
  "inventory",

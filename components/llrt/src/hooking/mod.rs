@@ -6,6 +6,7 @@ use retour::StaticDetour;
 
 mod framework;
 mod swapchain;
+mod wndproc;
 
 static mut HOOK_MANAGER: OnceLock<HookManager> = OnceLock::new();
 
@@ -101,6 +102,7 @@ pub unsafe fn init_hooks() -> Result<()> {
 
     info!("initializing hooks");
     swapchain::hook_swap_chain()?;
+    // wndproc::hook_wndproc()?;
     framework::hook_framework()?;
 
     Ok(())

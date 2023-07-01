@@ -3,6 +3,9 @@ mod hooking;
 mod resolvers;
 mod runtime;
 
+#[macro_use]
+extern crate retour;
+
 use crate::dalamud::DalamudPipe;
 use anyhow::Result;
 use log::{error, info, trace};
