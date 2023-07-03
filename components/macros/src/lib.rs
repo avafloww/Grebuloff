@@ -258,12 +258,20 @@ pub fn function_hook(
     };
     let fn_body = impl_fn.block.stmts;
 
+    // preserve calling convention, if specified on the function, otherwise default to C
+    let abi = impl_fn
+        .sig
+        .abi
+        .as_ref()
+        .map(|abi| quote! { #abi })
+        .unwrap_or_else(|| quote! { extern "C" });
+
     quote! {
         #[doc = "Auto-generated function hook."]
         #(#doc)*
         #[allow(non_upper_case_globals)]
         static_detour! {
-            static #hook_name: unsafe extern "C" #fn_type;
+            static #hook_name: unsafe #abi #fn_type;
         }
 
         #[doc = "Auto-generated function hook."]

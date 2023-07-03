@@ -1,5 +1,6 @@
 .bonelessrc.json
 
+deps/cef_binary*
 deps/cef-sys/cef_binary*
 local/
 dist/
