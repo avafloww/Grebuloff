@@ -121,7 +121,7 @@ fn init_sync(runtime_dir: Vec<u8>, dalamud_pipe_name: Option<Vec<u8>>) {
     tokio_rt.block_on(init_sync_on_tokio(runtime_dir, dalamud_pipe_name));
 }
 
-async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<u8>>) {
+async fn init_sync_on_tokio(_runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<u8>>) {
     if let Some(pipe_name) = dalamud_pipe_name {
         DALAMUD_PIPE
             .set(DalamudPipe::new(std::str::from_utf8(&pipe_name).unwrap()))

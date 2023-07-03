@@ -99,7 +99,7 @@ unsafe extern "stdcall" fn present(
 
     RENDER_DATA.with(move |cell| {
         let mut cell = cell.borrow_mut();
-        let mut data = match cell.get_mut() {
+        let data = match cell.get_mut() {
             Some(data) => {
                 // ensure we're rendering into the correct context
                 if data.sc_addr != &this as *const _ {
@@ -231,7 +231,7 @@ macro_rules! backup_shaders {
     ) => {{
         // save shader
         {
-            let (out, mut out_ptr, mut out_count) =
+            let (out, out_ptr, mut out_count) =
                 temp_array!(Option<ID3D11ClassInstance>, D3D11_SHADER_MAX_INTERFACES);
 
             $context.$get_shader(
@@ -245,7 +245,7 @@ macro_rules! backup_shaders {
 
         // save constant buffers
         {
-            let (out, mut out_ptr, mut out_count) = temp_array!(
+            let (out, out_ptr, out_count) = temp_array!(
                 Option<ID3D11Buffer>,
                 D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT
             );
@@ -257,7 +257,7 @@ macro_rules! backup_shaders {
 
         // save resources
         {
-            let (out, mut out_ptr, mut out_count) = temp_array!(
+            let (out, out_ptr, out_count) = temp_array!(
                 Option<ID3D11ShaderResourceView>,
                 D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT
             );
@@ -269,7 +269,7 @@ macro_rules! backup_shaders {
 
         // save samplers
         {
-            let (out, mut out_ptr, mut out_count) = temp_array!(
+            let (out, out_ptr, out_count) = temp_array!(
                 Option<ID3D11SamplerState>,
                 D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT
             );
@@ -412,13 +412,13 @@ impl RenderStateBackup {
 
         // save vertex buffers
         {
-            let (buf_out, mut buf_out_ptr, mut buf_out_count) = temp_array!(
+            let (buf_out, mut buf_out_ptr, buf_out_count) = temp_array!(
                 Option<ID3D11Buffer>,
                 D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT
             );
-            let (stride_out, mut stride_out_ptr, mut stride_out_count) =
+            let (stride_out, mut stride_out_ptr, stride_out_count) =
                 temp_array!(u32, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT);
-            let (offset_out, mut offset_out_ptr, mut offset_out_count) =
+            let (offset_out, mut offset_out_ptr, offset_out_count) =
                 temp_array!(u32, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT);
 
             context.IAGetVertexBuffers(

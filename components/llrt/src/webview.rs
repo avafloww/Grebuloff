@@ -1,11 +1,10 @@
 use anyhow::{bail, Result};
 use log::info;
 use serde::Deserialize;
-use serde_json::{Number, Value};
+use serde_json::{Value};
 use std::{
     cell::OnceCell,
-    collections::HashMap,
-    mem, ptr,
+    collections::HashMap, ptr,
     sync::{mpsc, Arc, Mutex},
 };
 use webview2_com::{Microsoft::Web::WebView2::Win32::*, *};
