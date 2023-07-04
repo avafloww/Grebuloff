@@ -1,7 +1,7 @@
 mod dalamud;
 mod hooking;
 mod resolvers;
-mod runtime;
+// mod runtime;
 mod webview;
 
 #[macro_use]
@@ -169,7 +169,7 @@ async fn init_async() -> Result<()> {
     // https://github.com/robmikh/screenshot-rs/tree/main - example code for win10 capture api in rust
     // https://github.com/jnschulze/flutter-webview-windows - example where this technique is used
     //
-    // task::spawn_blocking(|| webview::init_ui_host().unwrap()).await?;
+    task::spawn_blocking(|| webview::init_ui_host().expect("UI host unexpectedly exited")).await?;
 
     // run the main loop
     // this is the last thing that should be called in init_async

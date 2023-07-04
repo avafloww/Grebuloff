@@ -1,25 +1,31 @@
 use anyhow::{bail, Result};
-use log::info;
+use log::{debug, info, trace};
 use serde::Deserialize;
-use serde_json::{Value};
+use serde_json::Value;
 use std::{
-    cell::OnceCell,
-    collections::HashMap, ptr,
-    sync::{mpsc, Arc, Mutex},
+    cell::{OnceCell, RefCell},
+    collections::{HashMap, VecDeque},
+    mem::ManuallyDrop,
+    ptr,
+    sync::{mpsc, Arc, Mutex, RwLock},
+    time::{Duration, Instant},
 };
 use webview2_com::{Microsoft::Web::WebView2::Win32::*, *};
+use win_screenshot::prelude::{capture_window_ex, Area, RgbBuf, Using};
 use windows::{
     core::*,
     Win32::{
         Foundation::{E_POINTER, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM},
+        Graphics::{Direct3D11::D3D11_SUBRESOURCE_DATA, Gdi},
         System::{Com::*, LibraryLoader, Threading, WinRT::EventRegistrationToken},
         UI::WindowsAndMessaging::{
-            self, GetForegroundWindow, MSG, WNDCLASSW, WS_EX_LAYERED, WS_OVERLAPPEDWINDOW,
+            self, GetForegroundWindow, MSG, PM_REMOVE, WNDCLASSW, WS_DISABLED, WS_EX_LAYERED,
+            WS_EX_NOACTIVATE, WS_OVERLAPPEDWINDOW,
         },
     },
 };
 
-static mut WEBVIEW_INSTANCE: OnceCell<WebView> = OnceCell::new();
+static mut WEBVIEW_INSTANCE: OnceCell<Arc<WebView>> = OnceCell::new();
 
 pub fn init_ui_host() -> Result<()> {
     info!("initializing ui host");
@@ -28,7 +34,7 @@ pub fn init_ui_host() -> Result<()> {
         CoInitializeEx(None, COINIT_APARTMENTTHREADED)?;
     }
 
-    let webview = WebView::create(None, true)?;
+    let webview = Arc::new(WebView::create(None, true).unwrap());
     if !unsafe { WEBVIEW_INSTANCE.set(webview.clone()) }.is_ok() {
         bail!("failed to set webview instance");
     }
@@ -36,7 +42,9 @@ pub fn init_ui_host() -> Result<()> {
     webview.init(r#"console.log(`hello world!`);"#).unwrap();
 
     // Off we go....
-    webview.run()
+    webview.run().unwrap();
+
+    Ok(())
 }
 
 struct Window(HWND);
@@ -49,7 +57,6 @@ impl Drop for Window {
     }
 }
 
-#[derive(Clone)]
 pub struct FrameWindow {
     window: Arc<HWND>,
     size: Arc<Mutex<SIZE>>,
@@ -68,14 +75,14 @@ impl FrameWindow {
                 WindowsAndMessaging::RegisterClassW(&window_class);
 
                 WindowsAndMessaging::CreateWindowExW(
-                    WS_EX_LAYERED,
+                    WS_EX_LAYERED | WS_EX_NOACTIVATE,
                     w!("GrebuloffUIHost"),
                     w!("GrebuloffUIHost"),
-                    WS_OVERLAPPEDWINDOW,
+                    WS_DISABLED,
                     WindowsAndMessaging::CW_USEDEFAULT,
                     WindowsAndMessaging::CW_USEDEFAULT,
-                    WindowsAndMessaging::CW_USEDEFAULT,
-                    WindowsAndMessaging::CW_USEDEFAULT,
+                    1920 + 6,  //WindowsAndMessaging::CW_USEDEFAULT,
+                    1080 + 40, //WindowsAndMessaging::CW_USEDEFAULT,
                     None,
                     None,
                     LibraryLoader::GetModuleHandleW(None).unwrap_or_default(),
@@ -93,21 +100,17 @@ impl FrameWindow {
 
 struct WebViewController(ICoreWebView2Controller);
 
-type WebViewSender = mpsc::Sender<Box<dyn FnOnce(WebView) + Send>>;
-type WebViewReceiver = mpsc::Receiver<Box<dyn FnOnce(WebView) + Send>>;
 type BindingCallback = Box<dyn FnMut(Vec<Value>) -> Result<Value>>;
 type BindingsMap = HashMap<String, BindingCallback>;
 
-#[derive(Clone)]
 pub struct WebView {
-    controller: Arc<WebViewController>,
-    webview: Arc<ICoreWebView2>,
-    tx: WebViewSender,
-    rx: Arc<WebViewReceiver>,
+    controller: WebViewController,
+    webview: ICoreWebView2,
     thread_id: u32,
-    bindings: Arc<Mutex<BindingsMap>>,
+    bindings: Mutex<BindingsMap>,
     frame: Option<FrameWindow>,
-    parent: Arc<HWND>,
+    parent: HWND,
+    pub capture: WebViewCapture,
 }
 
 impl Drop for WebViewController {
@@ -174,7 +177,7 @@ impl WebView {
             rx.recv()?
         }?;
 
-        let size = get_window_size(unsafe { GetForegroundWindow() });
+        let size = get_window_size(parent);
         let mut client_rect = RECT::default();
         unsafe {
             WindowsAndMessaging::GetClientRect(parent, std::mem::transmute(&mut client_rect));
@@ -211,102 +214,57 @@ impl WebView {
             *frame.size.lock().unwrap() = size;
         }
 
-        let (tx, rx) = mpsc::channel();
-        let rx = Arc::new(rx);
         let thread_id = unsafe { Threading::GetCurrentThreadId() };
 
         let webview = WebView {
-            controller: Arc::new(WebViewController(controller)),
-            webview: Arc::new(webview),
-            tx,
-            rx,
+            controller: WebViewController(controller),
+            webview,
             thread_id,
-            bindings: Arc::new(Mutex::new(HashMap::new())),
+            bindings: Mutex::new(HashMap::new()),
             frame,
-            parent: Arc::new(parent),
+            parent,
+            capture: WebViewCapture::new(parent, 60),
         };
-
-        // Inject the invoke handler.
-        webview
-            .init(r#"window.external = { invoke: s => window.chrome.webview.postMessage(s) };"#)?;
-
-        let bindings = webview.bindings.clone();
-        let bound = webview.clone();
-        unsafe {
-            let mut _token = EventRegistrationToken::default();
-            webview.webview.add_WebMessageReceived(
-                &WebMessageReceivedEventHandler::create(Box::new(move |_webview, args| {
-                    if let Some(args) = args {
-                        let mut message = PWSTR(ptr::null_mut());
-                        if args.WebMessageAsJson(&mut message).is_ok() {
-                            let message = CoTaskMemPWSTR::from(message);
-                            if let Ok(value) =
-                                serde_json::from_str::<InvokeMessage>(&message.to_string())
-                            {
-                                if let Ok(mut bindings) = bindings.try_lock() {
-                                    if let Some(f) = bindings.get_mut(&value.method) {
-                                        match (*f)(value.params) {
-                                            Ok(result) => bound.resolve(value.id, 0, result),
-                                            Err(err) => bound.resolve(
-                                                value.id,
-                                                1,
-                                                Value::String(format!("{err:#?}")),
-                                            ),
-                                        }
-                                        .unwrap();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Ok(())
-                })),
-                &mut _token,
-            )?;
-        }
 
         Ok(webview)
     }
 
-    pub fn run(self) -> Result<()> {
-        let webview = self.webview.as_ref();
-        let (tx, rx) = mpsc::channel();
-
-        let handler = NavigationCompletedEventHandler::create(Box::new(move |_sender, _args| {
-            tx.send(()).expect("send over mpsc channel");
-            Ok(())
-        }));
-        let mut token = EventRegistrationToken::default();
+    fn run(self: Arc<Self>) -> Result<()> {
         unsafe {
-            webview.add_NavigationCompleted(&handler, &mut token)?;
             let url = CoTaskMemPWSTR::from("http://localhost:3000/");
-            webview.Navigate(*url.as_ref().as_pcwstr())?;
-            let result = webview2_com::wait_with_pump(rx);
-            webview.remove_NavigationCompleted(token)?;
-            result.unwrap();
+            self.webview.Navigate(*url.as_ref().as_pcwstr())?;
         }
 
         if let Some(frame) = self.frame.as_ref() {
             let hwnd = *frame.window;
             unsafe {
-                WindowsAndMessaging::ShowWindow(hwnd, WindowsAndMessaging::SW_SHOW);
+                WindowsAndMessaging::ShowWindow(hwnd, WindowsAndMessaging::SW_HIDE);
+                Gdi::UpdateWindow(hwnd);
             }
         }
 
         let mut msg = MSG::default();
-        let h_wnd = HWND::default();
+        let hwnd = self.parent;
+        let mut last_summary = Instant::now();
+
+        info!("starting ui host main loop");
 
         loop {
-            while let Ok(f) = self.rx.try_recv() {
-                (f)(self.clone());
-            }
-
+            // handle Windows messages
             unsafe {
-                let result = WindowsAndMessaging::GetMessageW(&mut msg, h_wnd, 0, 0).0;
+                let result = WindowsAndMessaging::PeekMessageW(&mut msg, hwnd, 0, 0, PM_REMOVE).0;
 
                 match result {
-                    -1 => break Err(windows::core::Error::from_win32().into()),
-                    0 => break Ok(()),
+                    -1 => {
+                        // break Err(windows::core::Error::from_win32().into()),
+                        let error = windows::core::Error::from_win32();
+                        if error.code().0 == 0 {
+                            // work around what's probably a Windows bug by ceremoniously ignoring this fake error
+                        } else {
+                            break Err(error.into());
+                        }
+                    }
+                    // 0 => break Ok(()),
                     _ => match msg.message {
                         WindowsAndMessaging::WM_APP => (),
                         _ => {
@@ -316,49 +274,19 @@ impl WebView {
                     },
                 }
             }
-        }
-    }
 
-    pub fn terminate(self) -> Result<()> {
-        self.dispatch(|_webview| unsafe {
-            WindowsAndMessaging::PostQuitMessage(0);
-        })?;
+            // capture if necessary
+            self.capture.capture_or_sleep()?;
 
-        Ok(())
-    }
-
-    pub fn set_size(&self, width: i32, height: i32) -> Result<&Self> {
-        if let Some(frame) = self.frame.as_ref() {
-            *frame.size.lock().expect("lock size") = SIZE {
-                cx: width,
-                cy: height,
-            };
-            unsafe {
-                self.controller.0.SetBounds(RECT {
-                    left: 0,
-                    top: 0,
-                    right: width,
-                    bottom: height,
-                })?;
-
-                WindowsAndMessaging::SetWindowPos(
-                    *frame.window,
-                    None,
-                    0,
-                    0,
-                    width,
-                    height,
-                    WindowsAndMessaging::SWP_NOACTIVATE
-                        | WindowsAndMessaging::SWP_NOZORDER
-                        | WindowsAndMessaging::SWP_NOMOVE,
+            if last_summary.elapsed() > Duration::from_secs(10) {
+                last_summary = Instant::now();
+                let (min, max, avg) = self.capture.frame_time_stats();
+                debug!(
+                    "UI capture: frame time summary: min {}ms, max {}ms, avg {}ms",
+                    min, max, avg
                 );
             }
         }
-        Ok(self)
-    }
-
-    pub fn get_window(&self) -> HWND {
-        *self.parent
     }
 
     pub fn init(&self, js: &str) -> Result<&Self> {
@@ -393,75 +321,8 @@ impl WebView {
         Ok(self)
     }
 
-    pub fn dispatch<F>(&self, f: F) -> Result<&Self>
-    where
-        F: FnOnce(WebView) + Send + 'static,
-    {
-        self.tx.send(Box::new(f)).expect("send the fn");
-
-        unsafe {
-            WindowsAndMessaging::PostThreadMessageW(
-                self.thread_id,
-                WindowsAndMessaging::WM_APP,
-                WPARAM::default(),
-                LPARAM::default(),
-            );
-        }
-        Ok(self)
-    }
-
-    pub fn bind<F>(&self, name: &str, f: F) -> Result<&Self>
-    where
-        F: FnMut(Vec<Value>) -> Result<Value> + 'static,
-    {
-        self.bindings
-            .lock()
-            .unwrap()
-            .insert(String::from(name), Box::new(f));
-
-        let js = String::from(
-            r#"
-            (function() {
-                var name = '"#,
-        ) + name
-            + r#"';
-                var RPC = window._rpc = (window._rpc || {nextSeq: 1});
-                window[name] = function() {
-                    var seq = RPC.nextSeq++;
-                    var promise = new Promise(function(resolve, reject) {
-                        RPC[seq] = {
-                            resolve: resolve,
-                            reject: reject,
-                        };
-                    });
-                    window.external.invoke({
-                        id: seq,
-                        method: name,
-                        params: Array.prototype.slice.call(arguments),
-                    });
-                    return promise;
-                }
-            })()"#;
-
-        self.init(&js)
-    }
-
-    pub fn resolve(&self, id: u64, status: i32, result: Value) -> Result<&Self> {
-        let result = result.to_string();
-
-        self.dispatch(move |webview| {
-            let method = match status {
-                0 => "resolve",
-                _ => "reject",
-            };
-            let js = format!(
-                r#"
-                window._rpc[{id}].{method}({result});
-                window._rpc[{id}] = undefined;"#
-            );
-
-            webview.eval(&js).expect("eval return script");
-        })
+    pub fn instance() -> Option<Arc<WebView>> {
+        unsafe { WEBVIEW_INSTANCE.get().cloned() }
     }
 }
 
@@ -496,6 +357,7 @@ extern "system" fn window_proc(hwnd: HWND, msg: u32, w_param: WPARAM, l_param: L
         }
 
         WindowsAndMessaging::WM_CLOSE => {
+            info!("WM_CLOSE");
             unsafe {
                 WindowsAndMessaging::DestroyWindow(hwnd);
             }
@@ -504,10 +366,157 @@ extern "system" fn window_proc(hwnd: HWND, msg: u32, w_param: WPARAM, l_param: L
 
         WindowsAndMessaging::WM_DESTROY => {
             // webview.terminate().expect("window is gone");
+            info!("WM_CLOSE");
             LRESULT::default()
         }
 
         _ => unsafe { WindowsAndMessaging::DefWindowProcW(hwnd, msg, w_param, l_param) },
+    }
+}
+
+pub struct WebViewCapture {
+    hwnd: HWND,
+    target_fps: u32,
+    frame_times_capacity: usize,
+    last_frame: RwLock<Option<WebViewCaptureFrame>>,
+    state: RwLock<WebViewCaptureState>,
+}
+
+pub struct WebViewCaptureState {
+    last_frame_time: Instant,
+    last_frame_times: VecDeque<u16>,
+}
+
+impl WebViewCapture {
+    fn new(hwnd: HWND, target_fps: u32) -> Self {
+        let frame_times_capacity = target_fps as usize * 5;
+        WebViewCapture {
+            hwnd,
+            target_fps,
+            frame_times_capacity,
+            last_frame: RwLock::new(None),
+            state: RwLock::new(WebViewCaptureState {
+                last_frame_time: Instant::now() - Duration::from_secs(1),
+                last_frame_times: VecDeque::with_capacity(frame_times_capacity),
+            }),
+        }
+    }
+
+    fn capture_or_sleep(&self) -> Result<()> {
+        let now = Instant::now();
+        let elapsed = now
+            .duration_since(self.state.read().unwrap().last_frame_time)
+            .as_secs_f64();
+        let time_between_frames = 1.0 / self.target_fps as f64;
+
+        if elapsed > time_between_frames {
+            self.capture()?;
+        } else {
+            // sleep for the remaining time until next capture
+            let duration = Duration::from_secs_f64(time_between_frames - elapsed);
+            trace!("capture_or_sleep: sleeping for {:?}", duration);
+            std::thread::sleep(duration);
+        }
+
+        Ok(())
+    }
+
+    fn capture(&self) -> Result<()> {
+        let mut state = self.state.write().unwrap();
+        let start = Instant::now();
+        state.last_frame_time = start;
+
+        // let hwnd = win_screenshot::utils::find_window(r"C:\").unwrap();
+
+        let frame = capture_window_ex(
+            self.hwnd.0,
+            Using::PrintWindow,
+            Area::ClientOnly,
+            None,
+            None,
+        )?;
+
+        if true {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let name = format!("test-{}.png", now);
+
+            debug!("saving {}", name);
+
+            // unix timestamp
+
+            let img = image::RgbaImage::from_raw(frame.width, frame.height, frame.pixels.clone())
+                .unwrap();
+
+            img.save(name).unwrap();
+        }
+
+        // save the frame to the last_frame
+        *self.last_frame.write().unwrap() = Some(WebViewCaptureFrame::new(&frame));
+
+        // record the time it took
+        let elapsed = start.elapsed().as_millis() as u16;
+        state
+            .last_frame_times
+            .truncate(self.frame_times_capacity - 1);
+        state.last_frame_times.push_front(elapsed);
+
+        Ok(())
+    }
+
+    /// Returns the min, max and average frame time in milliseconds.
+    pub fn frame_time_stats(&self) -> (u16, u16, u16) {
+        let state = &self.state.read().unwrap();
+
+        let mut min = u16::MAX;
+        let mut max = u16::MIN;
+        let mut sum = 0 as u64;
+
+        for time in &state.last_frame_times {
+            if time < &min {
+                min = *time;
+            }
+            if time > &max {
+                max = *time;
+            }
+            sum += *time as u64;
+        }
+
+        let avg = sum / state.last_frame_times.len() as u64;
+
+        (min, max, avg as u16)
+    }
+
+    pub fn get_last_frame(&self) -> Option<WebViewCaptureFrame> {
+        let state = self.last_frame.read().unwrap();
+        state.clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct WebViewCaptureFrame {
+    pub pixels: Box<[u8]>,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl WebViewCaptureFrame {
+    fn new(buf: &RgbBuf) -> Self {
+        Self {
+            pixels: buf.pixels.clone().into(),
+            width: buf.width,
+            height: buf.height,
+        }
+    }
+
+    pub fn into_subresource_data(self) -> D3D11_SUBRESOURCE_DATA {
+        D3D11_SUBRESOURCE_DATA {
+            pSysMem: self.pixels.as_ptr() as *const _,
+            SysMemPitch: self.width,
+            SysMemSlicePitch: self.pixels.len() as u32, // only applies to 3D textures
+        }
     }
 }
 
