@@ -16,7 +16,7 @@ msgbox = "0.7.0"
 log = "0.4"
 fern = "0.6.2"
 chrono = "0.4.26"
-tokio = { version = "1.28.2", features = ["net", "rt", "rt-multi-thread", "time", "sync", "macros"] }
+tokio = { version = "1.28.2", features = ["full"] }
 rmp = "0.8.11"
 rmp-serde = "1.1.1"
 serde = { version = "1.0.163", features = ["derive"] }
@@ -30,10 +30,7 @@ itertools = "0.10.5"
 rustc-hash = "1.1.0"
 # deno_core = "0.191.0"
 retour = { version = "0.3.0", features = ["static-detour"] }
-webview2-com = "0.25.0"
-# win-screenshot = "4.0.4"
-win-screenshot = { path = "../../../../win-screenshot" }
-image = "0.24.6"
+uuid = { version = "1.4.0", features = ["v4", "fast-rng"] }
 
 [build-dependencies]
 chrono = "0.4.26"

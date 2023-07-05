@@ -1,4 +1,4 @@
-use crate::{hooking::create_function_hook, webview::WebView};
+use crate::{hooking::create_function_hook, ui};
 use anyhow::Result;
 use ffxiv_client_structs::generated::ffxiv::client::graphics::kernel::{
     Device, Device_Fn_Instance,
@@ -447,172 +447,170 @@ unsafe extern "stdcall" fn present(
         };
 
         let context = device.GetImmediateContext().unwrap();
+        
+        match ui::get_latest_buffer() {
+            Some(buf) => {
+                // use a new scope here to ensure the state backup is dropped at the end,
+                // thus restoring the original render state before we call the original function
+                let _ = RenderStateBackup::new(device.GetImmediateContext().unwrap());
 
-        // use a new scope here to ensure the state backup is dropped at the end,
-        // thus restoring the original render state before we call the original function
-        {
-            let _ = RenderStateBackup::new(device.GetImmediateContext().unwrap());
+                // context.RSSetViewports(Some(&[D3D11_VIEWPORT {
+                //     TopLeftX: 0.0,
+                //     TopLeftY: 0.0,
+                //     Width: data.buffer_width as f32,
+                //     Height: data.buffer_height as f32,
+                //     ..Default::default()
+                // }]));
+                // context.IASetInputLayout(&data.input_layout);
+                // context.IASetVertexBuffers(0, 1, Some(&Some(data.vertex_buffer)), Some(&data.vertex_buffer_stride), Some(&data.vertex_buffer_offset));
+                // context.IASetIndexBuffer(&data.index_buffer, DXGI_FORMAT_R16_UINT, 0);
+                // context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                // context.VSSetShader(&data.vertex_shader, None);
+                // context.VSSetConstantBuffers(0, Some(&[Some(data.constant_buffer)]));
+                // context.PSSetShader(&data.pixel_shader, None);
+                // // context.PSSetSamplers(0, Some(&[Some(data.font_sampler)]));
+                // context.GSSetShader(None, None);
+                // context.HSSetShader(None, None);
+                // context.DSSetShader(None, None);
+                // context.CSSetShader(None, None);
 
-            // context.RSSetViewports(Some(&[D3D11_VIEWPORT {
-            //     TopLeftX: 0.0,
-            //     TopLeftY: 0.0,
-            //     Width: data.buffer_width as f32,
-            //     Height: data.buffer_height as f32,
-            //     ..Default::default()
-            // }]));
-            // context.IASetInputLayout(&data.input_layout);
-            // context.IASetVertexBuffers(0, 1, Some(&Some(data.vertex_buffer)), Some(&data.vertex_buffer_stride), Some(&data.vertex_buffer_offset));
-            // context.IASetIndexBuffer(&data.index_buffer, DXGI_FORMAT_R16_UINT, 0);
-            // context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            // context.VSSetShader(&data.vertex_shader, None);
-            // context.VSSetConstantBuffers(0, Some(&[Some(data.constant_buffer)]));
-            // context.PSSetShader(&data.pixel_shader, None);
-            // // context.PSSetSamplers(0, Some(&[Some(data.font_sampler)]));
-            // context.GSSetShader(None, None);
-            // context.HSSetShader(None, None);
-            // context.DSSetShader(None, None);
-            // context.CSSetShader(None, None);
+                // // Setup blend state
+                // context.OMSetBlendState(&data.blend_state, None, 0xFFFFFFFF); // second param?
+                // context.OMSetDepthStencilState(&data.depth_stencil_state, 0); // last param?
 
-            // // Setup blend state
-            // context.OMSetBlendState(&data.blend_state, None, 0xFFFFFFFF); // second param?
-            // context.OMSetDepthStencilState(&data.depth_stencil_state, 0); // last param?
+                // context.RSSetState(&data.rasterizer_state);
 
-            // context.RSSetState(&data.rasterizer_state);
+                /*
+                            _vertexBinding.Buffer = _vertexBuffer;
+                _deviceContext.InputAssembler.SetVertexBuffers(0, _vertexBinding);
+                _deviceContext.InputAssembler.SetIndexBuffer(_indexBuffer, Format.R16_UInt, 0);
+                _deviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+                _deviceContext.VertexShader.Set(_vertexShader);
+                _deviceContext.VertexShader.SetConstantBuffer(0, _vertexConstantBuffer);
+                _deviceContext.PixelShader.Set(_pixelShader);
+                _deviceContext.PixelShader.SetSampler(0, _fontSampler);
+                _deviceContext.GeometryShader.Set(null);
+                _deviceContext.HullShader.Set(null);
+                _deviceContext.DomainShader.Set(null);
+                _deviceContext.ComputeShader.Set(null);
 
-            /*
-                        _vertexBinding.Buffer = _vertexBuffer;
-            _deviceContext.InputAssembler.SetVertexBuffers(0, _vertexBinding);
-            _deviceContext.InputAssembler.SetIndexBuffer(_indexBuffer, Format.R16_UInt, 0);
-            _deviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
-            _deviceContext.VertexShader.Set(_vertexShader);
-            _deviceContext.VertexShader.SetConstantBuffer(0, _vertexConstantBuffer);
-            _deviceContext.PixelShader.Set(_pixelShader);
-            _deviceContext.PixelShader.SetSampler(0, _fontSampler);
-            _deviceContext.GeometryShader.Set(null);
-            _deviceContext.HullShader.Set(null);
-            _deviceContext.DomainShader.Set(null);
-            _deviceContext.ComputeShader.Set(null);
-
-            // Setup blend state
-            _deviceContext.OutputMerger.BlendState = _blendState;
-            _deviceContext.OutputMerger.BlendFactor = _blendColor;
-            _deviceContext.OutputMerger.DepthStencilState = _depthStencilState;
-            _deviceContext.Rasterizer.State = _rasterizerState; */
+                // Setup blend state
+                _deviceContext.OutputMerger.BlendState = _blendState;
+                _deviceContext.OutputMerger.BlendFactor = _blendColor;
+                _deviceContext.OutputMerger.DepthStencilState = _depthStencilState;
+                _deviceContext.Rasterizer.State = _rasterizerState; */
 
 
-            /*
-            // Setup orthographic projection matrix into our constant buffer
-            // Our visible imgui space lies from drawData.DisplayPos (top left) to drawData.DisplayPos+drawData.DisplaySize (bottom right). DisplayPos is (0,0) for single viewport apps.
-            var L = drawData.DisplayPos.X;
-            var R = drawData.DisplayPos.X + drawData.DisplaySize.X;
-            var T = drawData.DisplayPos.Y;
-            var B = drawData.DisplayPos.Y + drawData.DisplaySize.Y;
-            var mvp = new float[]
-            {
-                2f/(R-L),     0,              0,      0,
-                0,            2f/(T-B),       0,      0,
-                0,            0,              0.5f,   0,
-                (R+L)/(L-R),  (T+B)/(B-T),    0.5f,   1f
-            };
-
-            var constantBuffer = _deviceContext.MapSubresource(_vertexConstantBuffer, 0, MapMode.WriteDiscard, MapFlags.None).DataPointer;
-            unsafe
-            {
-                fixed (void* mvpPtr = mvp)
+                /*
+                // Setup orthographic projection matrix into our constant buffer
+                // Our visible imgui space lies from drawData.DisplayPos (top left) to drawData.DisplayPos+drawData.DisplaySize (bottom right). DisplayPos is (0,0) for single viewport apps.
+                var L = drawData.DisplayPos.X;
+                var R = drawData.DisplayPos.X + drawData.DisplaySize.X;
+                var T = drawData.DisplayPos.Y;
+                var B = drawData.DisplayPos.Y + drawData.DisplaySize.Y;
+                var mvp = new float[]
                 {
-                    System.Buffer.MemoryCopy(mvpPtr, constantBuffer.ToPointer(), 16 * sizeof(float), 16 * sizeof(float));
+                    2f/(R-L),     0,              0,      0,
+                    0,            2f/(T-B),       0,      0,
+                    0,            0,              0.5f,   0,
+                    (R+L)/(L-R),  (T+B)/(B-T),    0.5f,   1f
+                };
+
+                var constantBuffer = _deviceContext.MapSubresource(_vertexConstantBuffer, 0, MapMode.WriteDiscard, MapFlags.None).DataPointer;
+                unsafe
+                {
+                    fixed (void* mvpPtr = mvp)
+                    {
+                        System.Buffer.MemoryCopy(mvpPtr, constantBuffer.ToPointer(), 16 * sizeof(float), 16 * sizeof(float));
+                    }
                 }
+                _deviceContext.UnmapSubresource(_vertexConstantBuffer, 0); */
+
+                // // setup vertex buffer for a single full-screen quad
+                // {
+                //     let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
+                //     context.Map(&data.vertex_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
+                //     let mapped = mapped.assume_init();
+
+                //     let src = [
+                //         [0f32, 0f32, 0f32, 1f32],
+                //         [1f32, 0f32, 0f32, 1f32],
+                //         [1f32, 1f32, 0f32, 1f32],
+                //         [0f32, 1f32, 0f32, 1f32]
+                //     ];
+                //     let dst = mapped.pData as *mut f32;
+
+                //     std::ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len());
+
+                //     context.Unmap(&data.vertex_buffer, 0);
+                // }
+                // // Setup orthographic projection matrix into our constant buffer
+                // {
+                //     let mvp = [
+                //         2f32 / data.buffer_width as f32, 0f32, 0f32, 0f32,
+                //         0f32, 2f32 / -(data.buffer_height as i32) as f32, 0f32, 0f32,
+                //         0f32, 0f32, 0.5f32, 0f32,
+                //         -1f32, 1f32, 0.5f32, 1f32
+                //     ];
+
+                //     let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
+                //     context.Map(&data.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
+                //     let mapped = mapped.assume_init();
+
+                //     let src = mvp.as_ptr();
+                //     let dst = mapped.pData as *mut f32;
+
+                //     std::ptr::copy_nonoverlapping(src, dst, mvp.len());
+
+                //     context.Unmap(&data.constant_buffer, 0);
+                // }
+
+                // let colour = [0.2, 0.4, 0.6, 1.0];
+                // context.ClearRenderTargetView(&data.rtv, colour.as_ptr());
+
+                let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
+                context.Map(&data.texture, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
+                let mut mapped = mapped.assume_init();
+
+                let src = buf.as_ptr();
+                let dst = mapped.pData as *mut u8;
+
+                mapped.RowPitch = data.buffer_width * 4; // buf.width * 4;
+
+                let size = (data.buffer_width as usize * data.buffer_height as usize * 4).min(buf.len());
+                std::ptr::copy_nonoverlapping(src, dst, size);
+
+                context.Unmap(&data.texture, 0);
+                // let len = sub_data.width * sub_data.height * 4;
+                // data.last_frame_buffer = sub_data.pixels.clone();
+                
+                // context.UpdateSubresource(&data.texture, 0, None, data.last_frame_buffer.as_ptr() as *const _, sub_data.width * 4, len);
+                
+                context.RSSetViewports(Some(&[data.viewport]));
+                context.RSSetScissorRects(Some(&[data.scissor_rect]));
+                context.RSSetState(&data.rasterizer_state);
+
+                context.IASetInputLayout(None);
+                context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+                context.IASetVertexBuffers(0, 0, None, None, None);
+
+                context.VSSetShader(&data.vertex_shader, None);
+                context.PSSetShader(&data.pixel_shader, None);
+
+                context.PSSetShaderResources(0, Some(&[Some(data.srv.clone())]));
+                context.PSSetSamplers(0, Some(&[Some(data.sampler.clone())]));
+
+                context.OMSetBlendState(&data.blend_state, None, 0xffffffff);
+                context.OMSetDepthStencilState(&data.depth_stencil_state, 0);
+                
+                context.OMSetRenderTargets(Some(&[Some(data.rtv.clone())]), None);
+
+                context.Draw(3, 0);
+            },
+            None => {
+                // trace!("no frame to render");
             }
-            _deviceContext.UnmapSubresource(_vertexConstantBuffer, 0); */
-
-            // // setup vertex buffer for a single full-screen quad
-            // {
-            //     let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
-            //     context.Map(&data.vertex_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
-            //     let mapped = mapped.assume_init();
-
-            //     let src = [
-            //         [0f32, 0f32, 0f32, 1f32],
-            //         [1f32, 0f32, 0f32, 1f32],
-            //         [1f32, 1f32, 0f32, 1f32],
-            //         [0f32, 1f32, 0f32, 1f32]
-            //     ];
-            //     let dst = mapped.pData as *mut f32;
-
-            //     std::ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len());
-
-            //     context.Unmap(&data.vertex_buffer, 0);
-            // }
-            // // Setup orthographic projection matrix into our constant buffer
-            // {
-            //     let mvp = [
-            //         2f32 / data.buffer_width as f32, 0f32, 0f32, 0f32,
-            //         0f32, 2f32 / -(data.buffer_height as i32) as f32, 0f32, 0f32,
-            //         0f32, 0f32, 0.5f32, 0f32,
-            //         -1f32, 1f32, 0.5f32, 1f32
-            //     ];
-
-            //     let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
-            //     context.Map(&data.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
-            //     let mapped = mapped.assume_init();
-
-            //     let src = mvp.as_ptr();
-            //     let dst = mapped.pData as *mut f32;
-
-            //     std::ptr::copy_nonoverlapping(src, dst, mvp.len());
-
-            //     context.Unmap(&data.constant_buffer, 0);
-            // }
-
-            // let colour = [0.2, 0.4, 0.6, 1.0];
-            // context.ClearRenderTargetView(&data.rtv, colour.as_ptr());
-
-            match WebView::instance().map(|wv| wv.capture.get_last_frame()).flatten() {
-                Some(sub_data) => {
-                    let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
-                    context.Map(&data.texture, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
-                    let mut mapped = mapped.assume_init();
-
-                    let src = sub_data.pixels.as_ptr();
-                    let dst = mapped.pData as *mut u8;
-
-                    mapped.RowPitch = sub_data.width * 4;
-
-                    let size = (data.buffer_width as usize * data.buffer_height as usize * 4).min(sub_data.pixels.len());
-                    std::ptr::copy_nonoverlapping(src, dst, size);
-
-                    context.Unmap(&data.texture, 0);
-                    // let len = sub_data.width * sub_data.height * 4;
-                    // data.last_frame_buffer = sub_data.pixels.clone();
-                    
-                    // context.UpdateSubresource(&data.texture, 0, None, data.last_frame_buffer.as_ptr() as *const _, sub_data.width * 4, len);
-                },
-                None => {
-                    trace!("no frame to update with");
-                }
-            }
-            
-            context.RSSetViewports(Some(&[data.viewport]));
-            context.RSSetScissorRects(Some(&[data.scissor_rect]));
-            context.RSSetState(&data.rasterizer_state);
-
-            context.IASetInputLayout(None);
-            context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-            context.IASetVertexBuffers(0, 0, None, None, None);
-
-            context.VSSetShader(&data.vertex_shader, None);
-            context.PSSetShader(&data.pixel_shader, None);
-
-            context.PSSetShaderResources(0, Some(&[Some(data.srv.clone())]));
-            context.PSSetSamplers(0, Some(&[Some(data.sampler.clone())]));
-
-            context.OMSetBlendState(&data.blend_state, None, 0xffffffff);
-            context.OMSetDepthStencilState(&data.depth_stencil_state, 0);
-            
-            context.OMSetRenderTargets(Some(&[Some(data.rtv.clone())]), None);
-
-            context.Draw(3, 0);
-        }
+        };
 
         // call the original function
         original.call(this, sync_interval, present_flags)

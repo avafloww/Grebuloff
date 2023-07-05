@@ -1,5 +1,0 @@
-packages:
-  - 'components/libhlrt'
-  - 'components/hlrt'
-  - 'components/ui'
-  - 'docs'

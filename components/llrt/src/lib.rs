@@ -2,12 +2,12 @@ mod dalamud;
 mod hooking;
 mod resolvers;
 // mod runtime;
-mod webview;
+mod ui;
 
 #[macro_use]
 extern crate retour;
 
-use crate::dalamud::DalamudPipe;
+use crate::{dalamud::DalamudPipe, ui::UiHost};
 use anyhow::Result;
 use log::{error, info, trace};
 use msgbox::IconType;
@@ -18,6 +18,7 @@ use tokio::{task, time};
 
 static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static DALAMUD_PIPE: OnceLock<DalamudPipe> = OnceLock::new();
+static EXEC_ID: OnceLock<String> = OnceLock::new();
 
 dll_syringe::payload_procedure! {
     fn init_native(runtime_dir: Vec<u8>) {
@@ -43,6 +44,11 @@ pub fn get_load_method() -> GrebuloffLoadMethod {
     }
 
     GrebuloffLoadMethod::Native
+}
+
+pub fn get_execution_id() -> String {
+    // EXEC_ID.get().unwrap().clone()
+    "dev".to_owned()
 }
 
 fn setup_logging(dir: &PathBuf) {
@@ -100,6 +106,11 @@ fn setup_logging(dir: &PathBuf) {
 }
 
 fn init_sync(runtime_dir: Vec<u8>, dalamud_pipe_name: Option<Vec<u8>>) {
+    // generate an execution ID used for pipe communication
+    EXEC_ID
+        .set(uuid::Uuid::new_v4().to_string())
+        .expect("failed to set execution ID");
+
     let runtime_dir = PathBuf::from(std::str::from_utf8(&runtime_dir).unwrap());
 
     // set up logging early
@@ -130,8 +141,9 @@ async fn init_sync_on_tokio(_runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec
 
     info!("--------------------------------------------------");
     info!(
-        "Grebuloff Low-Level Runtime starting (load method: {:?})",
-        get_load_method()
+        "Grebuloff Low-Level Runtime starting (load method: {:?}, execution ID: {})",
+        get_load_method(),
+        get_execution_id()
     );
     info!("Build time: {}", env!("BUILD_TIMESTAMP"));
     info!("Git commit: {}", env!("GIT_DESCRIBE"));
@@ -169,7 +181,8 @@ async fn init_async() -> Result<()> {
     // https://github.com/robmikh/screenshot-rs/tree/main - example code for win10 capture api in rust
     // https://github.com/jnschulze/flutter-webview-windows - example where this technique is used
     //
-    task::spawn_blocking(|| webview::init_ui_host().expect("UI host unexpectedly exited")).await?;
+    // task::spawn_blocking(|| webview::init_ui_host().expect("UI host unexpectedly exited")).await?;
+    task::spawn(async { UiHost::new().run().await });
 
     // run the main loop
     // this is the last thing that should be called in init_async
