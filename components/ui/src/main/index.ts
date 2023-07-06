@@ -7,6 +7,10 @@ import PipeManager from './pipe';
 app.commandLine.appendSwitch('high-dpi-support', '1');
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
 
+// disable hardware acceleration as we're using offscreen rendering
+// https://github.com/electron/electron/issues/13368#issuecomment-401188989
+app.disableHardwareAcceleration();
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -20,19 +24,33 @@ app.whenReady().then(() => {
 
   const showNoPipe = !!process.env['SHOW_NO_PIPE'];
 
-  const mainWindow = new BrowserWindow({
+  let windowOpts = {
     width: 1920,
     height: 1080,
     show: showNoPipe,
     title: 'Grebuloff UI Host',
     autoHideMenuBar: true,
+    transparent: true,
+    frame: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
       nodeIntegration: false,
       offscreen: !showNoPipe,
     },
-  });
+  };
+
+  if (showNoPipe) {
+    windowOpts = {
+      ...windowOpts,
+      show: true,
+      title: 'Grebuloff UI Host (show/no-pipe mode)',
+      transparent: false,
+      frame: true,
+    };
+  }
+
+  const mainWindow = new BrowserWindow(windowOpts);
 
   mainWindow.webContents.setWindowOpenHandler((_details) => {
     // shell.openExternal(details.url);

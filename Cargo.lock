@@ -754,6 +754,7 @@ name = "grebuloff-llrt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "chrono",
  "dll-syringe",
  "fern",

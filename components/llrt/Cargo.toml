@@ -31,6 +31,7 @@ rustc-hash = "1.1.0"
 # deno_core = "0.191.0"
 retour = { version = "0.3.0", features = ["static-detour"] }
 uuid = { version = "1.4.0", features = ["v4", "fast-rng"] }
+bytes = "1.4.0"
 
 [build-dependencies]
 chrono = "0.4.26"

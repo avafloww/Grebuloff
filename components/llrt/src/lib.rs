@@ -1,3 +1,4 @@
+#![cfg_attr(debug_assertions, feature(core_intrinsics))]
 mod dalamud;
 mod hooking;
 mod resolvers;
