@@ -190,14 +190,10 @@ impl UiHost {
         // Electron on Windows uses BGRA as its native format, so we need to convert to RGBA
         let mut data = message.split_off(25);
 
-        #[cfg(debug_assertions)]
-        if data.len() != (dirty_width * dirty_height * bpp as u32) as usize {
-            unsafe { std::intrinsics::breakpoint() };
-        }
-        // assert_eq!(
-        //     data.len(),
-        //     (dirty_width * dirty_height * bpp as u32) as usize
-        // );
+        assert_eq!(
+            data.len(),
+            (dirty_width * dirty_height * bpp as u32) as usize
+        );
 
         data.chunks_exact_mut(4).for_each(|c| c.swap(0, 2));
 
