@@ -7,7 +7,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   background: transparent;
-  color: white;
+  color: red;
 }
 
 body.no-pipe {

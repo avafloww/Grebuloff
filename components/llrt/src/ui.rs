@@ -26,9 +26,6 @@ pub fn update_buffer_on_paint(mut paint: UiRpcServerboundPaint) {
             .byte_size_of(paint.dirty_width as usize, paint.dirty_height as usize)
     );
 
-    // Electron on Windows uses BGRA as its native format, so we need to convert to RGBA
-    paint.data.chunks_exact_mut(4).for_each(|c| c.swap(0, 2));
-
     merge_dirty_region(&paint)
 }
 

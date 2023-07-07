@@ -17,7 +17,7 @@ use windows::{
             Direct3D::{D3D11_SRV_DIMENSION_TEXTURE2D, D3D_PRIMITIVE_TOPOLOGY, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP},
             Direct3D11::*,
             Dxgi::{
-                Common::{DXGI_FORMAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
+                Common::{DXGI_FORMAT, DXGI_SAMPLE_DESC, DXGI_FORMAT_B8G8R8A8_UNORM},
                 IDXGISwapChain, DXGI_SWAP_CHAIN_DESC,
             },
         },
@@ -139,7 +139,8 @@ unsafe extern "stdcall" fn present(
                         Height: sc_desc.BufferDesc.Height,
                         MipLevels: 1,
                         ArraySize: 1,
-                        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                        // Electron on Windows uses BGRA as its native format, so we use that here
+                        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
                         SampleDesc: DXGI_SAMPLE_DESC {
                             Count: 1,
                             Quality: 0,
@@ -158,7 +159,7 @@ unsafe extern "stdcall" fn present(
                 // create the shader resource view
                 let srv = {
                     let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
-                        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
                         ViewDimension: D3D11_SRV_DIMENSION_TEXTURE2D,
                         Anonymous: D3D11_SHADER_RESOURCE_VIEW_DESC_0 {
                             Texture2D: D3D11_TEX2D_SRV {
