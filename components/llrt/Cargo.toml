@@ -32,6 +32,8 @@ rustc-hash = "1.1.0"
 retour = { version = "0.3.0", features = ["static-detour"] }
 uuid = { version = "1.4.0", features = ["v4", "fast-rng"] }
 bytes = "1.4.0"
+async-trait = "0.1.71"
+serde_bytes = "0.11.11"
 
 [build-dependencies]
 chrono = "0.4.26"

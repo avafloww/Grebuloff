@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "packageManager": "pnpm@8.6.2",
+  "devDependencies": {
+    "typescript": "^5.1.6"
+  }
+}

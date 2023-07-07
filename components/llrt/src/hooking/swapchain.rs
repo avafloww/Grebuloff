@@ -354,7 +354,7 @@ unsafe extern "stdcall" fn present(
             let _ = RenderStateBackup::new(device.GetImmediateContext().unwrap());
 
             // poll to see if we have new data, and if so, update the texture
-            if let Some(snapshot) = ui::poll_buffer_for_new_data() {
+            if let Some(snapshot) = ui::poll_dirty() {
                 let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
                 context.Map(&data.texture, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
                 let mut mapped = mapped.assume_init();

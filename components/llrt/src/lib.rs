@@ -1,14 +1,19 @@
-#![cfg_attr(debug_assertions, feature(core_intrinsics))]
 mod dalamud;
 mod hooking;
 mod resolvers;
 // mod runtime;
+mod rpc;
 mod ui;
 
 #[macro_use]
 extern crate retour;
+#[macro_use]
+extern crate serde;
 
-use crate::{dalamud::DalamudPipe, ui::UiHost};
+use crate::{
+    dalamud::DalamudPipe,
+    rpc::{ui::UiRpcServer, RpcServer},
+};
 use anyhow::Result;
 use log::{error, info, trace};
 use msgbox::IconType;
@@ -175,25 +180,18 @@ async fn init_sync_on_tokio(_runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec
 async fn init_async() -> Result<()> {
     info!("async init starting");
 
-    // temporarily disabled; webview2 has no clickthrough support as-is and we kinda need that
-    // probably going to have to render offscreen and graphics capture/bitblt to the screen
-    // but hey even that's hard! wv2 has no offscreen rendering API! :D
-    // some useful links:
-    // https://github.com/robmikh/screenshot-rs/tree/main - example code for win10 capture api in rust
-    // https://github.com/jnschulze/flutter-webview-windows - example where this technique is used
-    //
-    // task::spawn_blocking(|| webview::init_ui_host().expect("UI host unexpectedly exited")).await?;
-    task::spawn(async { UiHost::new().run().await });
+    // start the UI host
+    task::spawn(async { UiRpcServer::new().listen_forever().await });
 
     // run the main loop
     // this is the last thing that should be called in init_async
-    let mut interval = time::interval(time::Duration::from_millis(1000));
+    // let mut interval = time::interval(time::Duration::from_millis(1000));
 
-    loop {
-        interval.tick().await;
-        trace!("in main loop");
-        hooking::HookManager::instance().dump_hooks();
-    }
+    // loop {
+    //     interval.tick().await;
+    //     trace!("in main loop");
+    //     hooking::HookManager::instance().dump_hooks();
+    // }
 
     Ok(())
 }

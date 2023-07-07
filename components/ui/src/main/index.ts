@@ -1,7 +1,8 @@
 import { app, BrowserWindow } from 'electron';
 import { join } from 'path';
 import { optimizer, is } from '@electron-toolkit/utils';
-import PipeManager from './pipe';
+import { RpcClient } from './rpc/client';
+import { UiPainter } from './paint';
 
 // force a scale factor of 1, even on high-DPI displays, as we will control scaling ourselves
 app.commandLine.appendSwitch('high-dpi-support', '1');
@@ -79,8 +80,10 @@ app.whenReady().then(() => {
   console.log(`pipe id: ${pipeId}`);
 
   // create the pipe manager and connect
-  const pipeManager = new PipeManager(pipeId, mainWindow);
-  pipeManager.connect();
+  const rpcClient = new RpcClient(pipeId);
+  const uiPainter = new UiPainter(rpcClient, mainWindow);
+
+  rpcClient.connect();
 });
 
 app.on('window-all-closed', () => {
