@@ -1,13 +1,19 @@
 import { default as net, Socket } from 'net';
 import EventEmitter from 'events';
 import { RpcMessageType } from './messages';
-import { PackedRpcMessage, RpcDecoderStream, RpcEncoderStream } from './codec';
+import {
+  PackedRpcMessage,
+  RpcMessageDecoderStream,
+  RpcMessageEncoderStream,
+  RpcRawEncoderStream,
+} from './codec';
 
 export class RpcClient extends EventEmitter {
   private pipeName: string;
   private client: Socket | null = null;
-  private encoder: RpcEncoderStream | null = null;
-  private decoder: RpcDecoderStream | null = null;
+  private encoder: RpcMessageEncoderStream | null = null;
+  private rawEncoder: RpcRawEncoderStream | null = null;
+  private decoder: RpcMessageDecoderStream | null = null;
 
   constructor(pipeId: string) {
     super();
@@ -37,7 +43,23 @@ export class RpcClient extends EventEmitter {
       if (this.encoder.write(packed)) {
         process.nextTick(resolve);
       } else {
-        this.encoder.once('drain', () => {
+        this.client.once('drain', () => {
+          resolve();
+        });
+      }
+    });
+  }
+
+  async sendRaw(data: Buffer) {
+    new Promise<void>((resolve, reject) => {
+      if (!this.client || !this.rawEncoder) {
+        return reject(new Error('client is null'));
+      }
+
+      if (this.rawEncoder.write(data)) {
+        process.nextTick(resolve);
+      } else {
+        this.client.once('drain', () => {
           resolve();
         });
       }
@@ -49,15 +71,17 @@ export class RpcClient extends EventEmitter {
       throw new Error('client is null');
     }
 
-    this.encoder = new RpcEncoderStream();
-    this.decoder = new RpcDecoderStream();
+    this.encoder = new RpcMessageEncoderStream();
+    this.rawEncoder = new RpcRawEncoderStream();
+    this.decoder = new RpcMessageDecoderStream();
 
     this.client.pipe(this.decoder);
     this.encoder.pipe(this.client);
+    this.rawEncoder.pipe(this.client);
 
     this.decoder.on('data', this.onData.bind(this));
     this.client.on('end', this.onDisconnect.bind(this));
-    this.encoder.on('drain', this.onDrain.bind(this));
+    this.client.on('drain', this.onDrain.bind(this));
 
     console.log('connected to LLRT pipe');
 
@@ -69,9 +93,13 @@ export class RpcClient extends EventEmitter {
     this.emit('close');
   }
 
-  private onData(data: PackedRpcMessage) {
+  private onData(data: PackedRpcMessage | Buffer) {
     console.log('received data from LLRT pipe');
     console.dir(data);
+
+    if (!(data instanceof PackedRpcMessage)) {
+      throw new Error('received raw data from LLRT pipe');
+    }
   }
 
   private onDrain() {

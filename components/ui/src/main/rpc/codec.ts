@@ -1,23 +1,20 @@
 import { Packr, Unpackr } from 'msgpackr';
-import { Transform } from 'stream';
+import { Transform, TransformCallback } from 'stream';
 import { RpcMessageType } from './messages';
 
-export class RpcDecoderStream extends Transform {
-  private readonly codec: Unpackr;
-  private incompleteBuffer: Buffer | null = null;
+abstract class LengthDecoderStream extends Transform {
+  private incompleteChunk: Buffer | null = null;
 
   constructor() {
     super({
       objectMode: true,
     });
-
-    this.codec = new Unpackr();
   }
 
-  _transform(chunk: Buffer, encoding: string, callback: () => void) {
-    if (this.incompleteBuffer) {
-      chunk = Buffer.concat([this.incompleteBuffer, chunk]);
-      this.incompleteBuffer = null;
+  readFullChunk(chunk: Buffer): Buffer | null {
+    if (this.incompleteChunk) {
+      chunk = Buffer.concat([this.incompleteChunk, chunk]);
+      this.incompleteChunk = null;
     }
 
     // read a little-endian 32-bit integer from the start of the chunk
@@ -25,47 +22,94 @@ export class RpcDecoderStream extends Transform {
     if (chunk.length >= length + 4) {
       // if there's anything left in the chunk, it's the start of the next message - save it
       if (chunk.length > length + 4) {
-        this.incompleteBuffer = chunk.subarray(length + 4);
+        this.incompleteChunk = chunk.subarray(length + 4);
       }
 
-      // we have a complete message, trim the chunk to size
-      const fullChunk = chunk.subarray(4, length + 4);
+      // we have a complete chunk, trim the chunk to size and return it
+      return chunk.subarray(4, length + 4);
+    }
 
-      // decode the message
-      const decoded = this.codec.decode(fullChunk);
+    return null;
+  }
+}
 
-      // extract the message type
-      const type = Object.keys(decoded.Ui)[0] as RpcMessageType;
+abstract class LengthEncoderStream extends Transform {
+  constructor() {
+    super({
+      writableObjectMode: true,
+    });
+  }
 
-      // push the decoded message
-      this.push(new PackedRpcMessage(type, decoded.Ui[type]));
+  writeFullChunk(chunk: Buffer) {
+    // prepend the length
+    const length = Buffer.alloc(4);
+    length.writeUInt32LE(chunk.length, 0);
+
+    // push the encoded message
+    this.push(Buffer.concat([length, chunk]));
+  }
+}
+
+export class RpcMessageDecoderStream extends LengthDecoderStream {
+  private readonly codec: Unpackr;
+
+  constructor() {
+    super();
+    this.codec = new Unpackr();
+  }
+
+  _transform(
+    partialChunk: Buffer,
+    encoding: string,
+    callback: TransformCallback,
+  ) {
+    const fullChunk = this.readFullChunk(partialChunk);
+    if (fullChunk) {
+      // optimization: if the first byte is < 0xDE or > 0xDF, then we know it's not a valid
+      // msgpack structure for our purposes (since we only use maps), so we can skip the
+      // deserialization step and treat it as a raw message
+      // currently, the UI doesn't _receive_ any raw messages, but this is here for completeness
+      if (fullChunk[0] < 0xde || fullChunk[0] > 0xdf) {
+        this.push(fullChunk);
+      } else {
+        // decode the message
+        const decoded = this.codec.decode(fullChunk);
+
+        // extract the message type
+        const type = Object.keys(decoded.Ui)[0] as RpcMessageType;
+
+        // push the decoded message
+        this.push(new PackedRpcMessage(type, decoded.Ui[type]));
+      }
     }
 
     callback();
   }
 }
 
-export class RpcEncoderStream extends Transform {
+export class RpcMessageEncoderStream extends LengthEncoderStream {
   private readonly codec: Packr;
 
   constructor() {
-    super({
-      writableObjectMode: true,
-    });
-
+    super();
     this.codec = new Packr({ useRecords: false });
   }
 
-  _transform(chunk: PackedRpcMessage, encoding: string, callback: () => void) {
-    // encode the message
-    const encoded = this.codec.encode(chunk.into());
+  _transform(
+    message: PackedRpcMessage,
+    encoding: string,
+    callback: () => void,
+  ) {
+    const encoded = this.codec.encode(message.into());
+    this.writeFullChunk(encoded);
 
-    // prepend the length
-    const length = Buffer.alloc(4);
-    length.writeUInt32LE(encoded.length, 0);
+    callback();
+  }
+}
 
-    // push the encoded message
-    this.push(Buffer.concat([length, encoded]));
+export class RpcRawEncoderStream extends LengthEncoderStream {
+  _transform(message: Buffer, encoding: string, callback: () => void) {
+    this.writeFullChunk(message);
 
     callback();
   }

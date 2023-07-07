@@ -1,49 +1,42 @@
 use super::{RpcClientboundMessage, RpcServer, RpcServerOptions, RpcServerboundMessage};
 use crate::get_execution_id;
+use anyhow::{bail, Result};
+use bytes::{Buf, Bytes, BytesMut};
+use tokio::sync::mpsc;
 
 // 32MB buffer allows for 4K 32-bit RGBA images
 // TODO: make this configurable, or automatically sized based on the game window size
 const PIPE_BUFFER_SIZE: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, PartialEq, Deserialize)]
-pub enum UiRpcServerboundMessage {
-    /// A request to paint the UI.
-    Paint(UiRpcServerboundPaint),
-}
+pub enum UiRpcServerboundMessage {}
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq)]
 pub struct UiRpcServerboundPaint {
-    #[serde(rename = "vw")]
-    pub viewport_width: u32,
-
-    #[serde(rename = "vh")]
-    pub viewport_height: u32,
-
-    #[serde(rename = "f")]
+    pub width: u16,
+    pub height: u16,
     pub format: ImageFormat,
-
-    #[serde(rename = "dx")]
-    pub dirty_x: u32,
-
-    #[serde(rename = "dy")]
-    pub dirty_y: u32,
-
-    #[serde(rename = "dw")]
-    pub dirty_width: u32,
-
-    #[serde(rename = "dh")]
-    pub dirty_height: u32,
-
-    #[serde(rename = "d", with = "serde_bytes")]
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 impl UiRpcServerboundPaint {
-    pub fn is_fully_dirty(&self) -> bool {
-        self.dirty_x == 0
-            && self.dirty_y == 0
-            && self.dirty_width == self.viewport_width
-            && self.dirty_height == self.viewport_height
+    fn from_raw(mut buf: BytesMut) -> Result<Self> {
+        let data = buf.split_off(5).freeze();
+
+        // image format is first, so we don't overlap 0xDE/0xDF (msgpack map)
+        let format = match buf.get_u8() {
+            0 => ImageFormat::BGRA8,
+            _ => bail!("invalid image format"),
+        };
+        let width = buf.get_u16_le();
+        let height = buf.get_u16_le();
+
+        Ok(Self {
+            width,
+            height,
+            format,
+            data,
+        })
     }
 }
 
@@ -109,9 +102,19 @@ impl RpcServer for UiRpcServer {
         message: Self::Serverbound,
     ) -> anyhow::Result<()> {
         match message {
-            UiRpcServerboundMessage::Paint(paint) => crate::ui::update_buffer_on_paint(paint),
             _ => unimplemented!(),
         }
+
+        Ok(())
+    }
+
+    fn process_incoming_message_raw(
+        _send: mpsc::UnboundedSender<<Self as RpcServer>::Clientbound>,
+        message: BytesMut,
+    ) -> Result<()> {
+        // UI only uses raw messages for paint, so process it directly
+        let paint = UiRpcServerboundPaint::from_raw(message)?;
+        crate::ui::update_buffer_on_paint(paint);
 
         Ok(())
     }
@@ -125,53 +128,5 @@ impl UiRpcServer {
                 buffer_size: PIPE_BUFFER_SIZE,
             },
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use serde::Deserialize;
-
-    use super::*;
-    use crate::rpc::RpcMessageDirection;
-
-    #[test]
-    fn test_from() {
-        let valid = UiRpcServerboundMessage::Paint(UiRpcServerboundPaint {
-            viewport_width: 0,
-            viewport_height: 0,
-            format: ImageFormat::BGRA8,
-            dirty_x: 0,
-            dirty_y: 0,
-            dirty_width: 0,
-            dirty_height: 0,
-            data: vec![],
-        });
-        assert!(<<UiRpcServer as RpcServer>::Serverbound>::try_from(valid).is_ok());
-    }
-
-    // We deserialize in JSON for testing because it's easier to read.
-    // Actual implementation code uses msgpack.
-    #[test]
-    fn test_deserialize() {
-        let msg = RpcMessageDirection::Serverbound(RpcServerboundMessage::Ui(
-            UiRpcServerboundMessage::Paint(UiRpcServerboundPaint {
-                viewport_width: 123,
-                viewport_height: 456,
-                format: ImageFormat::BGRA8,
-                dirty_x: 69,
-                dirty_y: 42,
-                dirty_width: 1337,
-                dirty_height: 420,
-                data: vec![12, 34, 56, 78],
-            }),
-        ));
-
-        let serialized = r#"{"Ui":{"Paint":{"vw":123,"vh":456,"f":"BGRA8","dx":69,"dy":42,"dw":1337,"dh":420,"d":[12,34,56,78]}}}"#;
-
-        let mut de = serde_json::Deserializer::from_str(serialized);
-        let deserialized = RpcMessageDirection::deserialize(&mut de);
-        assert!(deserialized.is_ok());
-        assert_eq!(deserialized.unwrap(), msg);
     }
 }

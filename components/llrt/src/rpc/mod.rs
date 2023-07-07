@@ -96,7 +96,13 @@ pub trait RpcServer {
                 },
                 read = Self::triage_message(&mut buf, server) => match read {
                     Ok(message) => {
-                        Self::dispatch_message(message, send_tx.clone())?;
+                        let cloned_tx = send_tx.clone();
+                        tokio::spawn(async move {
+                            match Self::dispatch_message(message, cloned_tx) {
+                                Ok(_) => {},
+                                Err(e) => error!("[rpc:{}] error dispatching message: {}", Self::SERVER_NAME, e),
+                            }
+                        });
                     }
                     Err(e) => bail!(e),
                 }
@@ -141,22 +147,36 @@ pub trait RpcServer {
         mut message: BytesMut,
         send_tx: mpsc::UnboundedSender<<Self as RpcServer>::Clientbound>,
     ) -> Result<()> {
+        // optimization: if the first byte is < 0xDE or > 0xDF, then we know it's not a valid
+        // msgpack structure for our purposes (since we only use maps), so we can skip the
+        // deserialization step and pass it directly to process_incoming_message_raw
+        // most stuff shouldn't use this, but it's useful for the UI server, where
+        // performance is more important
+        if message[0] < 0xDE || message[0] > 0xDF {
+            if let Err(e) = <Self as RpcServer>::process_incoming_message_raw(send_tx, message) {
+                error!(
+                    "[rpc:{}] error processing message: {}",
+                    Self::SERVER_NAME,
+                    e
+                );
+            }
+
+            return Ok(());
+        }
+
         let mut de = rmp_serde::Deserializer::from_read_ref(&mut message[..]);
         match RpcMessageDirection::deserialize(&mut de) {
             Ok(rpc_message) => match rpc_message {
                 RpcMessageDirection::Serverbound(msg) => match Self::Serverbound::try_from(msg) {
                     Ok(msg) => {
-                        tokio::spawn(async move {
-                            if let Err(e) =
-                                <Self as RpcServer>::process_incoming_message(send_tx, msg)
-                            {
-                                error!(
-                                    "[rpc:{}] error processing message: {}",
-                                    Self::SERVER_NAME,
-                                    e
-                                );
-                            }
-                        });
+                        if let Err(e) = <Self as RpcServer>::process_incoming_message(send_tx, msg)
+                        {
+                            error!(
+                                "[rpc:{}] error processing message: {}",
+                                Self::SERVER_NAME,
+                                e
+                            );
+                        }
 
                         Ok(())
                     }
@@ -174,6 +194,15 @@ pub trait RpcServer {
 
     async fn queue_send(&self, _message: Self::Clientbound) -> Result<()> {
         todo!()
+    }
+
+    fn process_incoming_message_raw(
+        _send: mpsc::UnboundedSender<<Self as RpcServer>::Clientbound>,
+        _message: BytesMut,
+    ) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "process_incoming_message_raw is not implemented for this server"
+        ))
     }
 
     fn process_incoming_message(

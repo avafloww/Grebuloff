@@ -1,6 +1,5 @@
 import { BrowserWindow, NativeImage, Rectangle } from 'electron';
 import { RpcClient } from './rpc/client';
-import { RpcMessageType } from './rpc/messages';
 
 export class UiPainter {
   private paintData?: PaintData;
@@ -8,7 +7,7 @@ export class UiPainter {
   private sending = false;
 
   constructor(private rpc: RpcClient, browser: BrowserWindow) {
-    browser.webContents.beginFrameSubscription(true, this.onPaint.bind(this));
+    browser.webContents.beginFrameSubscription(false, this.onPaint.bind(this));
     setInterval(this.tick.bind(this), 1);
   }
 
@@ -23,7 +22,7 @@ export class UiPainter {
       this.sending = true;
 
       this.shouldRepaint = false;
-      await this.rpc.send(RpcMessageType.Paint, this.paintData?.prepared);
+      await this.rpc.sendRaw(this.paintData.prepareBuffer());
 
       this.sending = false;
       return true;
@@ -39,7 +38,7 @@ export class UiPainter {
 }
 
 export enum ImageFormat {
-  BGRA8 = 'BGRA8',
+  BGRA8 = 0,
 }
 
 export class PaintData {
@@ -49,21 +48,18 @@ export class PaintData {
   ) {}
 
   /**
-   * Gets the prepared data to send to LLRT.
-   * You must consume this object in the same event loop tick as using this getter;
+   * Gets the prepared buffer to send to LLRT.
+   * You must consume this buffer in the same event loop tick as calling this method;
    * otherwise, the image data is not guaranteed to be valid.
    */
-  get prepared() {
+  prepareBuffer(): Buffer {
+    const buf = Buffer.alloc(5);
+
     const size = this.image.getSize();
-    return {
-      vw: size.width,
-      vh: size.height,
-      f: ImageFormat.BGRA8.toString(),
-      dx: this.dirty.x,
-      dy: this.dirty.y,
-      dw: this.dirty.width,
-      dh: this.dirty.height,
-      d: this.image.getBitmap(),
-    };
+    buf.writeUInt8(ImageFormat.BGRA8, 0);
+    buf.writeUInt16LE(size.width, 1);
+    buf.writeUInt16LE(size.height, 3);
+
+    return Buffer.concat([buf, this.image.getBitmap()]);
   }
 }
