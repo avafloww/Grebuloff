@@ -75,7 +75,7 @@ pub enum UiRpcClientboundMessage {
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum ImageFormat {
-    RGBA8,
+    BGRA8,
 }
 
 impl ImageFormat {
@@ -85,7 +85,7 @@ impl ImageFormat {
 
     pub fn bytes_per_pixel(&self) -> u32 {
         match self {
-            ImageFormat::RGBA8 => 4,
+            ImageFormat::BGRA8 => 4,
         }
     }
 }
@@ -140,7 +140,7 @@ mod tests {
         let valid = UiRpcServerboundMessage::Paint(UiRpcServerboundPaint {
             viewport_width: 0,
             viewport_height: 0,
-            format: ImageFormat::RGBA8,
+            format: ImageFormat::BGRA8,
             dirty_x: 0,
             dirty_y: 0,
             dirty_width: 0,
@@ -158,7 +158,7 @@ mod tests {
             UiRpcServerboundMessage::Paint(UiRpcServerboundPaint {
                 viewport_width: 123,
                 viewport_height: 456,
-                format: ImageFormat::RGBA8,
+                format: ImageFormat::BGRA8,
                 dirty_x: 69,
                 dirty_y: 42,
                 dirty_width: 1337,
@@ -167,7 +167,7 @@ mod tests {
             }),
         ));
 
-        let serialized = r#"{"Ui":{"Paint":{"vw":123,"vh":456,"f":"RGBA8","dx":69,"dy":42,"dw":1337,"dh":420,"d":[12,34,56,78]}}}"#;
+        let serialized = r#"{"Ui":{"Paint":{"vw":123,"vh":456,"f":"BGRA8","dx":69,"dy":42,"dw":1337,"dh":420,"d":[12,34,56,78]}}}"#;
 
         let mut de = serde_json::Deserializer::from_str(serialized);
         let deserialized = RpcMessageDirection::deserialize(&mut de);

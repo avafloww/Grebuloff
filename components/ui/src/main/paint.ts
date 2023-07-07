@@ -39,7 +39,7 @@ export class UiPainter {
 }
 
 export enum ImageFormat {
-  RGBA8 = 'RGBA8',
+  BGRA8 = 'BGRA8',
 }
 
 export class PaintData {
@@ -58,7 +58,7 @@ export class PaintData {
     return {
       vw: size.width,
       vh: size.height,
-      f: ImageFormat.RGBA8.toString(),
+      f: ImageFormat.BGRA8.toString(),
       dx: this.dirty.x,
       dy: this.dirty.y,
       dw: this.dirty.width,

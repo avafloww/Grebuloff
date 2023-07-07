@@ -12,11 +12,11 @@ pub fn poll_dirty() -> Option<UiBufferSnapshot> {
     lock.as_ref().map(|v| v.poll_dirty()).flatten()
 }
 
-pub fn update_buffer_on_paint(mut paint: UiRpcServerboundPaint) {
+pub fn update_buffer_on_paint(paint: UiRpcServerboundPaint) {
     assert_eq!(
         paint.format,
-        ImageFormat::RGBA8,
-        "only ImageFormat::RGBA8 is supported"
+        ImageFormat::BGRA8,
+        "only ImageFormat::BGRA8 is supported"
     );
 
     assert_eq!(
