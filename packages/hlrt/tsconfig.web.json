@@ -1,5 +1,5 @@
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "./tsconfig.json",
   "include": [
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*.{ts,tsx}",

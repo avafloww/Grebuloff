@@ -1,81 +1,23 @@
+#!/usr/bin/env node
 //
 // Boneless: the janky Grebuloff build script
 //
 
-import child_process from 'child_process';
+import child_process, {
+  ChildProcess,
+  SpawnOptionsWithoutStdio,
+} from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.resolve(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
-);
-
-// Versions
-const DOTNET_MIN_VERSION = '7';
-const RUST_MIN_VERSION = '1.65';
-
-// Files and directories
-const USER_HOME = process.env['HOME'] || process.env['USERPROFILE'] || '.';
-const RC_FILE = path.join(USER_HOME, '.bonelessrc.json');
-
-const COMPONENTS_DIR = path.join(__dirname, 'components');
-const OUTPUT_DIR = path.join(__dirname, 'build');
-
-const CS_RUST_DIR = path.join(__dirname, 'deps', 'FFXIVClientStructs', 'rust');
-
-// Project info
-const PROJECTS = {
-  cs: {
-    type: 'rust',
-    description: 'FFXIVClientStructs Rust bindings',
-    dir: CS_RUST_DIR,
-    required: true,
-    runTests: true,
-  },
-  injector: {
-    type: 'rust',
-    dir: path.join(COMPONENTS_DIR, 'injector'),
-    artifact: path.join(OUTPUT_DIR, 'grebuloff-injector.exe'),
-    required: true,
-  },
-  llrt: {
-    type: 'rust',
-    description: 'Low-Level Runtime (LLRT)',
-    dir: path.join(COMPONENTS_DIR, 'llrt'),
-    artifact: path.join(OUTPUT_DIR, 'grebuloff_llrt.dll'),
-    required: true,
-  },
-  libhlrt: {
-    type: 'js',
-    description: 'High-Level Runtime Library (libhlrt)',
-    dir: path.join(COMPONENTS_DIR, 'libhlrt'),
-    artifact: path.join(OUTPUT_DIR, 'libhlrt'),
-    required: true,
-  },
-  hlrt: {
-    type: 'js',
-    description: 'High-Level Runtime (hlrt)',
-    dir: path.join(COMPONENTS_DIR, 'hlrt'),
-    artifact: path.join(OUTPUT_DIR, 'hlrt'),
-    required: true,
-  },
-  ui: {
-    type: 'js',
-    description: 'user interface',
-    dir: path.join(COMPONENTS_DIR, 'ui'),
-  },
-  dalamud: {
-    type: 'dotnet',
-    description: 'Dalamud helper plugin',
-    dir: path.join(COMPONENTS_DIR, 'dalamud'),
-  },
-};
+import * as constants from './constants.js';
 
 //
 // Utility functions
 //
-async function execGet(cmd, extraOpts = {}) {
+async function execGet(
+  cmd: string,
+  extraOpts: SpawnOptionsWithoutStdio = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = child_process.spawn(
       cmd,
@@ -84,8 +26,8 @@ async function execGet(cmd, extraOpts = {}) {
 
     let output = '';
 
-    function recv(data) {
-      let str = data.toString();
+    function recv(data: Buffer) {
+      const str = data.toString();
       output += str;
     }
 
@@ -102,9 +44,9 @@ async function execGet(cmd, extraOpts = {}) {
   });
 }
 
-async function exec(cmd, extraOpts = {}) {
-  return new Promise((resolve, reject) => {
-    const child = child_process.spawn(
+async function exec(cmd: string, extraOpts: SpawnOptionsWithoutStdio = {}) {
+  return new Promise<void>((resolve, reject) => {
+    const child: ChildProcess = child_process.spawn(
       cmd,
       Object.assign({ shell: true, stdio: 'inherit' }, extraOpts),
     );
@@ -119,15 +61,21 @@ async function exec(cmd, extraOpts = {}) {
   });
 }
 
-async function withProjects(func, projects = Object.keys(PROJECTS)) {
+async function withProjects(
+  func: (
+    name: string,
+    meta: constants.ProjectMeta,
+  ) => unknown | Promise<unknown>,
+  projects: string | string[] = Object.keys(constants.PROJECTS),
+) {
   if (typeof projects === 'string') {
     projects = [projects];
   }
 
-  let ret = [];
+  const ret: unknown[] = [];
   for (const p of projects) {
-    const meta = PROJECTS[p];
-    let pret = func(p, meta);
+    const meta = constants.PROJECTS[p];
+    const pret = func(p, meta);
     if (pret !== undefined) {
       if (pret instanceof Promise) {
         await pret;
@@ -142,19 +90,23 @@ async function withProjects(func, projects = Object.keys(PROJECTS)) {
   return ret;
 }
 
-async function execFor(project, cmd, extraOpts = {}) {
+async function execFor(
+  project: string | string[],
+  cmd: string,
+  extraOpts = {},
+) {
   await withProjects(async (name, meta) => {
     await exec(cmd, Object.assign({ cwd: meta.dir }, extraOpts));
   }, project);
 }
 
-async function copyArtifact(file) {
-  if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR);
+async function copyArtifact(file: string) {
+  if (!fs.existsSync(constants.OUTPUT_DIR)) {
+    fs.mkdirSync(constants.OUTPUT_DIR);
   }
 
-  const src = path.join(__dirname, file);
-  const dest = path.join(OUTPUT_DIR, path.basename(file));
+  const src = path.join(constants.WORKSPACE, file);
+  const dest = path.join(constants.OUTPUT_DIR, path.basename(file));
 
   // if src ends in a wildcard, copy everything matching the wildcard
   if (src.endsWith('*')) {
@@ -173,7 +125,7 @@ async function copyArtifact(file) {
   }
 }
 
-function checkMinVersion(version, minVersion) {
+function checkMinVersion(version: string, minVersion: string) {
   const versionParts = version.split('.');
   const minVersionParts = minVersion.split('.');
   for (let i = 0; i < minVersionParts.length; i++) {
@@ -203,9 +155,9 @@ async function checkBuildTools() {
     let rustcVersion = await execGet(`rustc --version`);
     rustcVersion = rustcVersion.split(' ')[1];
     console.log(`Found rustc ${rustcVersion}`);
-    if (!checkMinVersion(rustcVersion, RUST_MIN_VERSION)) {
+    if (!checkMinVersion(rustcVersion, constants.RUST_MIN_VERSION)) {
       console.error(
-        `Rust nightly ${RUST_MIN_VERSION} or higher is required (found ${rustcVersion}). Please install the latest Rust nightly toolchain.`,
+        `Rust nightly ${constants.RUST_MIN_VERSION} or higher is required (found ${rustcVersion}). Please install the latest Rust nightly toolchain.`,
       );
       return false;
     }
@@ -227,7 +179,7 @@ async function checkBuildTools() {
   try {
     const dotnetVersion = await execGet(`dotnet --version`);
     console.log(`Found .NET ${dotnetVersion}`);
-    if (!checkMinVersion(dotnetVersion, DOTNET_MIN_VERSION)) {
+    if (!checkMinVersion(dotnetVersion, constants.DOTNET_MIN_VERSION)) {
       console.error(
         `.NET 7 or higher is required (found ${dotnetVersion}). Please install the latest .NET SDK.`,
       );
@@ -343,6 +295,7 @@ switch (operation) {
     break;
   default:
     console.error(`Unknown operation ${operation}`);
+  // fallthrough
   case null:
     await showHelp();
     process.exit(1);
@@ -358,12 +311,12 @@ if (opType === 'build') {
   }
 
   // collect targets
-  let targets = [];
+  let targets: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const target = args[i].toLowerCase();
 
     if (target === 'all') {
-      targets = PROJECTS.keys();
+      targets = Object.keys(constants.PROJECTS);
       break;
     }
 
@@ -371,7 +324,7 @@ if (opType === 'build') {
       continue;
     }
 
-    if (!(target in PROJECTS)) {
+    if (!(target in constants.PROJECTS)) {
       console.error(`Unknown target ${target}`);
       showHelp();
       process.exit(1);
@@ -395,8 +348,8 @@ if (opType === 'build') {
   if (operation === 'clean' || operation === 'rebuild') {
     console.log('Cleaning build artifacts...');
 
-    if (fs.existsSync(OUTPUT_DIR)) {
-      fs.rmSync(OUTPUT_DIR, { recursive: true });
+    if (fs.existsSync(constants.OUTPUT_DIR)) {
+      fs.rmSync(constants.OUTPUT_DIR, { recursive: true });
     }
 
     await withProjects(async (name, meta) => {
@@ -407,8 +360,7 @@ if (opType === 'build') {
       }
     });
 
-    await exec(`cargo clean`, { cwd: CS_RUST_DIR });
-    await exec(`dotnet clean`, { cwd: CS_EXPORTER_DIR });
+    await exec(`cargo clean`, { cwd: constants.CS_RUST_DIR });
   }
 
   //
@@ -416,7 +368,7 @@ if (opType === 'build') {
   //
   if (operation === 'build' || operation === 'rebuild') {
     // ensure clientstructs is cloned
-    if (!fs.existsSync(CS_RUST_DIR)) {
+    if (!fs.existsSync(constants.CS_RUST_DIR)) {
       console.log('Updating submodules...');
       await exec(`git submodule update --init --recursive`);
     }
@@ -433,16 +385,23 @@ if (opType === 'build') {
           await execFor(name, 'cargo build');
           if (meta.runTests) {
             console.log(`Running tests for ${name}...`);
-            await execFor(name, 'cargo test');
+            try {
+              await execFor(name, 'cargo test');
+            } catch (e) {
+              if (meta.allowTestFailures) {
+                console.warn(
+                  `Tests failed for ${name}, but allowTestFailures is set. Continuing...`,
+                );
+              } else {
+                console.error(`Tests failed for ${name}`);
+                process.exit(4);
+              }
+            }
           }
-          await copyArtifact(path.join('target', 'debug', 'grebuloff*'));
+
+          await copyArtifact(path.join('build', 'debug', 'grebuloff*'));
           await copyArtifact(
-            path.join(
-              'target',
-              'x86_64-pc-windows-msvc',
-              'debug',
-              'grebuloff*',
-            ),
+            path.join('build', 'x86_64-pc-windows-msvc', 'debug', 'grebuloff*'),
           );
           break;
         case 'dotnet':
@@ -458,32 +417,32 @@ if (opType === 'build') {
   }
 } else if (opType === 'run') {
   if (operation === 'set-path') {
-    let path = args.shift();
-    if (!path) {
+    let gamePath = args.shift();
+    if (!gamePath) {
       console.error('Missing path argument');
       process.exit(3);
     }
 
     // check to see if the path is a directory, and if so, append the exe
     try {
-      if (fs.statSync(path).isDirectory()) {
-        path = path.join(path, 'ffxiv_dx11.exe');
+      if (fs.statSync(gamePath).isDirectory()) {
+        gamePath = path.join(gamePath, 'ffxiv_dx11.exe');
       }
     } catch (e) {
-      console.error(`Path ${path} does not exist`);
+      console.error(`Path ${gamePath} does not exist`);
       process.exit(3);
     }
 
     const config = {
-      gamePath: path,
+      gamePath,
     };
 
-    fs.writeFileSync(RC_FILE, JSON.stringify(config));
-    console.log(`Game path set to ${path}`);
+    fs.writeFileSync(constants.RC_FILE, JSON.stringify(config));
+    console.log(`Game path set to ${gamePath}`);
   } else if (operation === 'launch') {
     let config;
     try {
-      config = JSON.parse(fs.readFileSync(RC_FILE, 'utf8'));
+      config = JSON.parse(fs.readFileSync(constants.RC_FILE, 'utf8'));
       if (!config.gamePath) {
         throw 'deez';
       }
@@ -507,7 +466,7 @@ if (opType === 'build') {
 
     // launch the injector
     await exec(
-      `${PROJECTS.injector.artifact} launch --game-path "${gamePath}"`,
+      `${constants.PROJECTS.injector.artifact} launch --game-path "${gamePath}"`,
     );
   } else if (operation === 'inject') {
     // ensure the injector and runtime are built
@@ -516,6 +475,6 @@ if (opType === 'build') {
     }
 
     // launch the injector
-    await exec(`${PROJECTS.injector.artifact} inject`);
+    await exec(`${constants.PROJECTS.injector.artifact} inject`);
   }
 }

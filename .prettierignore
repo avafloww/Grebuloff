@@ -1,5 +1,6 @@
+build
 out
-dist
+node_modules
 pnpm-lock.yaml
 tsconfig.json
 tsconfig.*.json

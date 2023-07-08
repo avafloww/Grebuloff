@@ -1,11 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "components/macros",
-    "components/injector",
-    "components/llrt",
+    "crates/macros",
+    "crates/injector",
+    "crates/llrt",
 ]
 exclude = [
-    "components/ui/**/*",
     "deps/FFXIVClientStructs"
 ]

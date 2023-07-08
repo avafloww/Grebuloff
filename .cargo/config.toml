@@ -1,5 +1,6 @@
 [build]
 target = "x86_64-pc-windows-msvc"
+target-dir = "build"
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"
