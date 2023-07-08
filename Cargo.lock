@@ -819,7 +819,6 @@ dependencies = [
  "rmp-serde",
  "rustc-hash",
  "serde",
- "serde_bytes",
  "serde_json",
  "tokio",
  "uuid",
@@ -1623,15 +1622,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7daf513456463b42aa1d94cff7e0c24d682b429f020b9afa4f5ba5c40a22b237"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde_bytes"
-version = "0.11.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a16be4fe5320ade08736447e3198294a5ea9a6d44dde6f35f0a5e06859c427a"
-dependencies = [
- "serde",
 ]
 
 [[package]]

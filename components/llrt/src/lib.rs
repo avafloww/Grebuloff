@@ -181,7 +181,7 @@ async fn init_async() -> Result<()> {
     info!("async init starting");
 
     // start the UI host
-    task::spawn(async { UiRpcServer::new().listen_forever().await });
+    task::spawn(async { UiRpcServer::instance().listen_forever().await });
 
     // run the main loop
     // this is the last thing that should be called in init_async

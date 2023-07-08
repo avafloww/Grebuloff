@@ -55,7 +55,7 @@ export class RpcMessageDecoderStream extends LengthDecoderStream {
 
   constructor() {
     super();
-    this.codec = new Unpackr();
+    this.codec = new Unpackr({ useRecords: false });
   }
 
   _transform(
@@ -65,15 +65,20 @@ export class RpcMessageDecoderStream extends LengthDecoderStream {
   ) {
     const fullChunk = this.readFullChunk(partialChunk);
     if (fullChunk) {
-      // optimization: if the first byte is < 0xDE or > 0xDF, then we know it's not a valid
-      // msgpack structure for our purposes (since we only use maps), so we can skip the
+      // optimization: if the first byte isn't within 0x80-0x8f or 0xde-0xdf, then we know it's not a
+      // valid msgpack structure for our purposes (since we only use maps), so we can skip the
       // deserialization step and treat it as a raw message
       // currently, the UI doesn't _receive_ any raw messages, but this is here for completeness
-      if (fullChunk[0] < 0xde || fullChunk[0] > 0xdf) {
+      if (
+        fullChunk[0] < 0x80 ||
+        (fullChunk[0] > 0x8f && fullChunk[0] < 0xde) ||
+        fullChunk[0] > 0xdf
+      ) {
         this.push(fullChunk);
       } else {
         // decode the message
         const decoded = this.codec.decode(fullChunk);
+        console.dir(decoded);
 
         // extract the message type
         const type = Object.keys(decoded.Ui)[0] as RpcMessageType;
@@ -118,7 +123,7 @@ export class RpcRawEncoderStream extends LengthEncoderStream {
 export class PackedRpcMessage {
   constructor(
     public readonly type: RpcMessageType,
-    public readonly data: unknown,
+    public readonly data: any, // todo
   ) {}
 
   into() {

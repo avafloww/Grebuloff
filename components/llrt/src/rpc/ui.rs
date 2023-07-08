@@ -1,7 +1,9 @@
 use super::{RpcClientboundMessage, RpcServer, RpcServerOptions, RpcServerboundMessage};
-use crate::get_execution_id;
+use crate::{get_execution_id, get_tokio_rt};
 use anyhow::{bail, Result};
 use bytes::{Buf, Bytes, BytesMut};
+use log::debug;
+use std::sync::OnceLock;
 use tokio::sync::mpsc;
 
 // 32MB buffer allows for 4K 32-bit RGBA images
@@ -10,35 +12,6 @@ const PIPE_BUFFER_SIZE: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub enum UiRpcServerboundMessage {}
-
-#[derive(Debug, PartialEq)]
-pub struct UiRpcServerboundPaint {
-    pub width: u16,
-    pub height: u16,
-    pub format: ImageFormat,
-    pub data: Bytes,
-}
-
-impl UiRpcServerboundPaint {
-    fn from_raw(mut buf: BytesMut) -> Result<Self> {
-        let data = buf.split_off(5).freeze();
-
-        // image format is first, so we don't overlap 0xDE/0xDF (msgpack map)
-        let format = match buf.get_u8() {
-            0 => ImageFormat::BGRA8,
-            _ => bail!("invalid image format"),
-        };
-        let width = buf.get_u16_le();
-        let height = buf.get_u16_le();
-
-        Ok(Self {
-            width,
-            height,
-            format,
-            data,
-        })
-    }
-}
 
 impl TryFrom<RpcServerboundMessage> for UiRpcServerboundMessage {
     type Error = ();
@@ -57,11 +30,49 @@ impl From<UiRpcClientboundMessage> for RpcClientboundMessage {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+// note to future self: use actual structs instead of enum variant values
+// since rmp-serde doesn't properly (how we want it to, anyways) support
+// variant values
+#[derive(Debug, PartialEq, Serialize)]
 pub enum UiRpcClientboundMessage {
     /// Sent when the game window is resized.
     /// Triggers a resize of the UI.
-    Resize { width: u32, height: u32 },
+    Resize(UiRpcClientboundResize),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct UiRpcServerboundPaint {
+    pub width: u16,
+    pub height: u16,
+    pub format: ImageFormat,
+    pub data: Bytes,
+}
+
+impl UiRpcServerboundPaint {
+    fn from_raw(mut buf: BytesMut) -> Result<Self> {
+        let data = buf.split_off(5).freeze();
+
+        // image format is first, so we don't overlap 0x80..=0x8F | 0xDE..=0xDF (msgpack map)
+        let format = match buf.get_u8() {
+            0 => ImageFormat::BGRA8,
+            _ => bail!("invalid image format"),
+        };
+        let width = buf.get_u16_le();
+        let height = buf.get_u16_le();
+
+        Ok(Self {
+            width,
+            height,
+            format,
+            data,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+pub struct UiRpcClientboundResize {
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Represents supported image formats.
@@ -120,13 +131,30 @@ impl RpcServer for UiRpcServer {
     }
 }
 
+static mut UI_RPC_SERVER: OnceLock<UiRpcServer> = OnceLock::new();
+
 impl UiRpcServer {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             options: RpcServerOptions {
                 pipe_name: format!("\\\\.\\pipe\\grebuloff-llrt-ui-{}", get_execution_id()).into(),
                 buffer_size: PIPE_BUFFER_SIZE,
             },
         }
+    }
+
+    pub fn instance() -> &'static Self {
+        unsafe { UI_RPC_SERVER.get_or_init(Self::new) }
+    }
+
+    pub fn resize(width: u32, height: u32) {
+        get_tokio_rt().spawn(async move {
+            debug!("informing UI of resize to {}x{}", width, height);
+            Self::queue_send(UiRpcClientboundMessage::Resize(UiRpcClientboundResize {
+                width,
+                height,
+            }))
+            .await
+        });
     }
 }

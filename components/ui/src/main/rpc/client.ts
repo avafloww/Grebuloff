@@ -7,6 +7,8 @@ import {
   RpcMessageEncoderStream,
   RpcRawEncoderStream,
 } from './codec';
+import { UiPainter } from '../paint';
+import { BrowserWindow } from 'electron';
 
 export class RpcClient extends EventEmitter {
   private pipeName: string;
@@ -15,9 +17,15 @@ export class RpcClient extends EventEmitter {
   private rawEncoder: RpcRawEncoderStream | null = null;
   private decoder: RpcMessageDecoderStream | null = null;
 
-  constructor(pipeId: string) {
+  // downstream services
+  // todo: tidy this up
+  private uiPainter: UiPainter;
+
+  constructor(pipeId: string, mainWindow: BrowserWindow) {
     super();
     this.pipeName = `\\\\.\\pipe\\grebuloff-llrt-ui-${pipeId}`;
+
+    this.uiPainter = new UiPainter(this, mainWindow);
   }
 
   connect() {
@@ -29,8 +37,10 @@ export class RpcClient extends EventEmitter {
     );
   }
 
-  get connected() {
-    return this.client && this.client.writable;
+  get ready() {
+    return (
+      this.client && this.client.writable && !this.client.writableNeedDrain
+    );
   }
 
   async send(type: RpcMessageType, data: unknown) {
@@ -93,12 +103,19 @@ export class RpcClient extends EventEmitter {
     this.emit('close');
   }
 
-  private onData(data: PackedRpcMessage | Buffer) {
+  private onData(packed: PackedRpcMessage | Buffer) {
     console.log('received data from LLRT pipe');
-    console.dir(data);
+    console.dir(packed);
 
-    if (!(data instanceof PackedRpcMessage)) {
-      throw new Error('received raw data from LLRT pipe');
+    if (!(packed instanceof PackedRpcMessage)) {
+      throw new Error('received unexpected raw data from LLRT pipe');
+    }
+
+    const data = packed.data;
+    switch (packed.type) {
+      case RpcMessageType.Resize:
+        this.uiPainter.handleResize(data.width, data.height);
+        break;
     }
   }
 

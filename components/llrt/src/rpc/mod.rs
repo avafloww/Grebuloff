@@ -1,16 +1,20 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use log::{error, info};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ffi::OsString};
+use std::{any::Any, borrow::Cow, ffi::OsString, sync::OnceLock};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::windows::named_pipe::{NamedPipeServer, PipeMode, ServerOptions},
-    sync::mpsc,
+    sync::{mpsc, Mutex},
 };
 
 pub mod ui;
+
+static mut CLIENT_STATE: OnceLock<Mutex<FxHashMap<&'static str, Box<dyn Any + Send>>>> =
+    OnceLock::new();
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -39,6 +43,58 @@ pub struct RpcServerOptions {
     pub buffer_size: usize,
 }
 
+struct RpcServerClientState<C>
+where
+    C: Into<RpcClientboundMessage> + Send + 'static,
+{
+    pub send: mpsc::UnboundedSender<C>,
+}
+
+async fn with_client_state<C, T>(
+    server_name: &'static str,
+    f: impl FnOnce(&mut RpcServerClientState<C>) -> T,
+) -> Result<T>
+where
+    C: Into<RpcClientboundMessage> + Send + 'static,
+{
+    let mut state = unsafe { &CLIENT_STATE }
+        .get_or_init(|| Mutex::new(FxHashMap::default()))
+        .lock()
+        .await;
+    let state = state.get_mut(server_name);
+
+    match state {
+        Some(state) => {
+            let state = state.downcast_mut::<RpcServerClientState<C>>().unwrap();
+            Ok(f(state))
+        }
+        None => bail!("no client state for server {}", server_name),
+    }
+}
+
+async fn set_client_state<C>(server_name: &'static str, new_state: Option<RpcServerClientState<C>>)
+where
+    C: Into<RpcClientboundMessage> + Send + 'static,
+{
+    let mut state_map = unsafe { &CLIENT_STATE }
+        .get_or_init(|| Mutex::new(FxHashMap::default()))
+        .lock()
+        .await;
+
+    match new_state {
+        Some(new_state) => {
+            if let Some(old_state) = state_map.get_mut(server_name) {
+                *old_state = Box::new(new_state);
+            } else {
+                state_map.insert(server_name, Box::new(new_state));
+            }
+        }
+        None => {
+            state_map.remove(server_name);
+        }
+    }
+}
+
 #[async_trait]
 pub trait RpcServer {
     const SERVER_NAME: &'static str;
@@ -60,6 +116,8 @@ pub trait RpcServer {
 
     async fn await_connection(&self) -> Result<()> {
         loop {
+            set_client_state::<Self::Clientbound>(Self::SERVER_NAME, None).await;
+
             info!(
                 "[rpc:{}] awaiting connection on {}",
                 Self::SERVER_NAME,
@@ -78,15 +136,24 @@ pub trait RpcServer {
     }
 
     async fn handle_connection(&self, server: &mut NamedPipeServer) -> Result<()> {
-        let mut buf = BytesMut::with_capacity(self.options().buffer_size);
         let (send_tx, mut send_rx) = mpsc::unbounded_channel::<Self::Clientbound>();
+        let our_send_tx = send_tx.clone();
+        set_client_state::<Self::Clientbound>(
+            Self::SERVER_NAME,
+            Some(RpcServerClientState::<Self::Clientbound> { send: send_tx }),
+        )
+        .await;
 
+        let mut buf = BytesMut::with_capacity(self.options().buffer_size);
+
+        // tracking the length outside the loop to ensure cancel safety
+        let mut pending_len: Option<usize> = None;
         loop {
             tokio::select! {
                 send_queue = send_rx.recv() => if let Some(outbound_msg) = send_queue {
                     // serialize the message
                     let mut message = Vec::new();
-                    let mut serializer = rmp_serde::Serializer::new(&mut message);
+                    let mut serializer = rmp_serde::Serializer::new(&mut message).with_struct_map();
                     RpcMessageDirection::Clientbound(<Self::Clientbound as Into<RpcClientboundMessage>>::into(outbound_msg))
                         .serialize(&mut serializer)?;
 
@@ -94,9 +161,9 @@ pub trait RpcServer {
                     server.write_u32_le(message.len() as u32).await?;
                     server.write_all(&message).await?;
                 },
-                read = Self::triage_message(&mut buf, server) => match read {
+                read = Self::triage_message(&mut buf, &mut pending_len, server) => match read {
                     Ok(message) => {
-                        let cloned_tx = send_tx.clone();
+                        let cloned_tx = our_send_tx.clone();
                         tokio::spawn(async move {
                             match Self::dispatch_message(message, cloned_tx) {
                                 Ok(_) => {},
@@ -112,10 +179,9 @@ pub trait RpcServer {
 
     async fn triage_message(
         mut buf: &mut BytesMut,
+        pending_len: &mut Option<usize>,
         reader: &mut (impl AsyncReadExt + Send + Unpin),
     ) -> Result<BytesMut> {
-        let mut pending_len: Option<usize> = None;
-
         loop {
             match reader.read_buf(&mut buf).await {
                 Ok(0) => bail!("pipe broken"),
@@ -123,15 +189,20 @@ pub trait RpcServer {
                     // first check to see if this is a new message
                     if let None = pending_len {
                         // starting a new message, read the length
-                        let _ = pending_len.insert(buf.split_to(4).get_u32_le() as usize);
+                        let len = buf.split_to(4).get_u32_le() as usize;
+                        if len == 0 {
+                            bail!("message length is zero");
+                        }
+
+                        let _ = pending_len.insert(len);
                     }
 
                     // if we have a pending message length, check to see if we have enough data
                     if let Some(required) = pending_len {
-                        if buf.len() >= required {
+                        if buf.len() >= *required {
                             // split off the message, process it, and get ready for the next one
-                            let message = buf.split_to(required);
-                            assert_eq!(message.len(), required);
+                            let message = buf.split_to(*required);
+                            assert_eq!(message.len(), *required);
                             pending_len.take();
 
                             return Ok(message);
@@ -147,21 +218,29 @@ pub trait RpcServer {
         mut message: BytesMut,
         send_tx: mpsc::UnboundedSender<<Self as RpcServer>::Clientbound>,
     ) -> Result<()> {
-        // optimization: if the first byte is < 0xDE or > 0xDF, then we know it's not a valid
-        // msgpack structure for our purposes (since we only use maps), so we can skip the
+        if message.len() < 1 {
+            bail!("message too short");
+        }
+
+        // optimization: if the first byte isn't within 0x80-0x8f or 0xde-0xdf, then we know it's not a
+        // valid msgpack structure for our purposes (since we only use maps), so we can skip the
         // deserialization step and pass it directly to process_incoming_message_raw
         // most stuff shouldn't use this, but it's useful for the UI server, where
         // performance is more important
-        if message[0] < 0xDE || message[0] > 0xDF {
-            if let Err(e) = <Self as RpcServer>::process_incoming_message_raw(send_tx, message) {
-                error!(
-                    "[rpc:{}] error processing message: {}",
-                    Self::SERVER_NAME,
-                    e
-                );
-            }
+        match message[0] {
+            0x00..=0x7F | 0x90..=0xDD | 0xE0..=0xFF => {
+                if let Err(e) = <Self as RpcServer>::process_incoming_message_raw(send_tx, message)
+                {
+                    error!(
+                        "[rpc:{}] error processing message: {}",
+                        Self::SERVER_NAME,
+                        e
+                    );
+                }
 
-            return Ok(());
+                return Ok(());
+            }
+            _ => {}
         }
 
         let mut de = rmp_serde::Deserializer::from_read_ref(&mut message[..]);
@@ -192,8 +271,14 @@ pub trait RpcServer {
         }
     }
 
-    async fn queue_send(&self, _message: Self::Clientbound) -> Result<()> {
-        todo!()
+    async fn queue_send(message: Self::Clientbound) -> Result<()> {
+        with_client_state::<Self::Clientbound, Result<()>>(Self::SERVER_NAME, |state| {
+            state
+                .send
+                .send(message)
+                .map_err(|e| anyhow!("error sending message: {}", e))
+        })
+        .await?
     }
 
     fn process_incoming_message_raw(
@@ -229,8 +314,14 @@ mod tests {
     async fn do_test_triage() -> BytesMut {
         let mut data = TEST_MESSAGE.clone();
         let mut buffer = BytesMut::new();
+        let mut pending_length: Option<usize> = None;
 
-        let triaged = <ui::UiRpcServer as RpcServer>::triage_message(&mut buffer, &mut data).await;
+        let triaged = <ui::UiRpcServer as RpcServer>::triage_message(
+            &mut buffer,
+            &mut pending_length,
+            &mut data,
+        )
+        .await;
 
         assert!(triaged.is_ok());
         triaged.unwrap()

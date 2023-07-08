@@ -6,19 +6,21 @@ export class UiPainter {
   private shouldRepaint = true;
   private sending = false;
 
-  constructor(private rpc: RpcClient, browser: BrowserWindow) {
-    browser.webContents.beginFrameSubscription(false, this.onPaint.bind(this));
+  constructor(private rpc: RpcClient, private browser: BrowserWindow) {
+    browser.webContents.on('paint', this.onPaint.bind(this));
     setInterval(this.tick.bind(this), 1);
   }
 
-  private tick() {
-    this.repaint();
+  handleResize(width: number, height: number) {
+    console.log(`resize: ${width}x${height}`);
+    this.paintData = undefined;
+    this.browser.setContentSize(width, height);
   }
 
   async repaint(): Promise<boolean> {
     if (!this.paintData) return false;
 
-    if (this.rpc.connected && !this.sending && this.shouldRepaint) {
+    if (this.rpc.ready && !this.sending && this.shouldRepaint) {
       this.sending = true;
 
       this.shouldRepaint = false;
@@ -31,7 +33,11 @@ export class UiPainter {
     return false;
   }
 
-  private onPaint(image: NativeImage, dirty: Rectangle) {
+  private tick() {
+    this.repaint();
+  }
+
+  private onPaint(_event: Event, dirty: Rectangle, image: NativeImage) {
     this.paintData = new PaintData(dirty, image);
     this.shouldRepaint = true;
   }

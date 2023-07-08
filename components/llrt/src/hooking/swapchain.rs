@@ -1,25 +1,26 @@
-use crate::{hooking::create_function_hook, ui};
+use crate::{hooking::create_function_hook, rpc::ui::UiRpcServer, ui};
 use anyhow::Result;
 use ffxiv_client_structs::generated::ffxiv::client::graphics::kernel::{
     Device, Device_Fn_Instance,
 };
 use grebuloff_macros::{function_hook, vtable_functions, VTable};
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use std::{
-    cell::{OnceCell, RefCell},
+    cell::{RefCell, RefMut},
     mem::MaybeUninit,
     ptr::addr_of_mut,
 };
-use windows::{
-    Win32::{
-        Foundation::{RECT},
-        Graphics::{
-            Direct3D::{D3D11_SRV_DIMENSION_TEXTURE2D, D3D_PRIMITIVE_TOPOLOGY, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP},
-            Direct3D11::*,
-            Dxgi::{
-                Common::{DXGI_FORMAT, DXGI_SAMPLE_DESC, DXGI_FORMAT_R8G8B8A8_UNORM},
-                IDXGISwapChain, DXGI_SWAP_CHAIN_DESC,
-            },
+use windows::Win32::{
+    Foundation::RECT,
+    Graphics::{
+        Direct3D::{
+            D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP, D3D11_SRV_DIMENSION_TEXTURE2D,
+            D3D_PRIMITIVE_TOPOLOGY,
+        },
+        Direct3D11::*,
+        Dxgi::{
+            Common::{DXGI_FORMAT, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
+            IDXGISwapChain, DXGI_SWAP_CHAIN_DESC,
         },
     },
 };
@@ -78,6 +79,7 @@ pub unsafe fn hook_swap_chain() -> Result<()> {
     let resolved = resolve_swap_chain();
 
     create_function_hook!(present, *resolved.address_table().present()).enable()?;
+    create_function_hook!(resize_buffers, *resolved.address_table().resize_buffers()).enable()?;
 
     Ok(())
 }
@@ -104,6 +106,40 @@ struct RenderData {
 }
 
 #[function_hook]
+unsafe extern "stdcall" fn resize_buffers(
+    this: IDXGISwapChain,
+    buffer_count: u32,
+    width: u32,
+    height: u32,
+    new_format: DXGI_FORMAT,
+    swapchain_flags: u32,
+) -> i32 {
+    // using a separate block scope here to make extra sure that we don't
+    // accidentally hold onto any old resources when calling the original
+    {
+        RENDER_DATA.with(|cell| {
+            let cell = cell.borrow_mut();
+            if cell.is_some() {
+                trace!("calling initialize_render_data from IDXGISwapChain::ResizeBuffers");
+                initialize_render_data(&this, cell, Some((width, height)));
+            }
+        });
+    }
+
+    // inform the UI host of the new size
+    UiRpcServer::resize(width, height);
+
+    original.call(
+        this,
+        buffer_count,
+        width,
+        height,
+        new_format,
+        swapchain_flags,
+    )
+}
+
+#[function_hook]
 unsafe extern "stdcall" fn present(
     this: IDXGISwapChain,
     sync_interval: u32,
@@ -113,245 +149,17 @@ unsafe extern "stdcall" fn present(
 
     RENDER_DATA.with(move |cell| {
         let mut cell = cell.borrow_mut();
-        let data = match cell.as_mut() {
-            Some(data) => {
-                // ensure we're rendering into the correct context
-                if data.sc_addr != &this as *const _ {
-                    debug!("IDXGISwapChain::Present called with a different swap chain than before, executing original function");
-                    return original.call(this, sync_interval, present_flags);
-                }
+        if cell.is_none() {
+            // initialize the render data
+            trace!("calling initialize_render_data from IDXGISwapChain::Present");
+            cell = initialize_render_data(&this, cell, None);
+        }
 
-                data
-            },
-            None => {
-                // initialize our render data for this thread (the render thread)
-                trace!("initializing RenderData on IDXGISwapChain::Present");
-
-                let sc_desc = {
-                    let mut sc_desc = MaybeUninit::<DXGI_SWAP_CHAIN_DESC>::zeroed();
-                    this.GetDesc(sc_desc.as_mut_ptr()).expect("failed to get DXGI_SWAP_CHAIN_DESC");
-                    sc_desc.assume_init()
-                };
-
-                let texture = {
-                    let texture_desc = D3D11_TEXTURE2D_DESC {
-                        Width: sc_desc.BufferDesc.Width,
-                        Height: sc_desc.BufferDesc.Height,
-                        MipLevels: 1,
-                        ArraySize: 1,
-                        // despite our input image being BGRA, it seems faster to specify
-                        // RGBA here and then swizzle the channels in the pixel shader,
-                        // likely because the game's native format is RGBA? idk
-                        // it could be placebo, but we'll roll with it
-                        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
-                        SampleDesc: DXGI_SAMPLE_DESC {
-                            Count: 1,
-                            Quality: 0,
-                        },
-                        Usage: D3D11_USAGE_DYNAMIC,
-                        BindFlags: D3D11_BIND_SHADER_RESOURCE,
-                        CPUAccessFlags: D3D11_CPU_ACCESS_WRITE,
-                        ..Default::default()
-                    };
-
-                    let mut tex = MaybeUninit::<Option<ID3D11Texture2D>>::zeroed();
-                    device.CreateTexture2D(&texture_desc, None, Some(tex.as_mut_ptr())).expect("CreateTexture2D failed");
-                    tex.assume_init().expect("CreateTexture2D returned null")
-                };
-
-                // create the shader resource view
-                let srv = {
-                    let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
-                        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
-                        ViewDimension: D3D11_SRV_DIMENSION_TEXTURE2D,
-                        Anonymous: D3D11_SHADER_RESOURCE_VIEW_DESC_0 {
-                            Texture2D: D3D11_TEX2D_SRV {
-                                MostDetailedMip: 0,
-                                MipLevels: 1,
-                            },
-                        },
-                    };
-
-                    let mut srv = MaybeUninit::<Option<ID3D11ShaderResourceView>>::zeroed();
-                    device.CreateShaderResourceView(&texture, Some(&srv_desc), Some(srv.as_mut_ptr())).expect("CreateShaderResourceView failed");
-                    srv.assume_init().expect("CreateShaderResourceView returned null")
-                };
-                
-                // create the pixel shader
-                let pixel_shader = {
-                    let ps_bytecode = include_bytes!("shaders/ps.cso");
-                    let mut ps = MaybeUninit::<Option<ID3D11PixelShader>>::zeroed();
-                    device.CreatePixelShader(ps_bytecode, None, Some(ps.as_mut_ptr())).expect("CreatePixelShader failed");
-                    ps.assume_init().expect("CreatePixelShader returned null")
-                };
-
-                // create the vertex shader
-                let vertex_shader = {
-                    let vs_bytecode = include_bytes!("shaders/vs.cso");
-                    let mut vs = MaybeUninit::<Option<ID3D11VertexShader>>::zeroed();
-                    device.CreateVertexShader(vs_bytecode, None, Some(vs.as_mut_ptr())).expect("CreateVertexShader failed");
-                    vs.assume_init().expect("CreateVertexShader returned null")
-                };
-
-                // create the linear clamp sampler
-                let sampler = {
-                    let sampler_desc = D3D11_SAMPLER_DESC {
-                        Filter: D3D11_FILTER_MIN_MAG_MIP_POINT,
-                        AddressU: D3D11_TEXTURE_ADDRESS_CLAMP,
-                        AddressV: D3D11_TEXTURE_ADDRESS_CLAMP,
-                        AddressW: D3D11_TEXTURE_ADDRESS_CLAMP,
-                        ComparisonFunc: D3D11_COMPARISON_ALWAYS,
-                        MinLOD: 0.0,
-                        MaxLOD: 1.0,
-                        MipLODBias: 0.0,
-                        MaxAnisotropy: 0,
-                        BorderColor: [0.0; 4],
-                    };
-
-                    let mut sampler = MaybeUninit::<Option<ID3D11SamplerState>>::zeroed();
-                    device.CreateSamplerState(&sampler_desc, Some(sampler.as_mut_ptr())).expect("CreateSamplerState failed");
-                    sampler.assume_init().expect("CreateSamplerState returned null")
-                };
-
-                // create alpha blend state
-                let blend_state = {
-                    let blend_desc = D3D11_BLEND_DESC {
-                        AlphaToCoverageEnable: false.into(),
-                        RenderTarget: [
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                BlendEnable: true.into(),
-                                SrcBlend: D3D11_BLEND_SRC_ALPHA,
-                                DestBlend: D3D11_BLEND_INV_SRC_ALPHA,
-                                BlendOp: D3D11_BLEND_OP_ADD,
-                                SrcBlendAlpha: D3D11_BLEND_INV_SRC_ALPHA,
-                                DestBlendAlpha: D3D11_BLEND_ZERO,
-                                BlendOpAlpha: D3D11_BLEND_OP_ADD,
-                                RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL.0 as u8,
-                            },
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                ..Default::default()
-                            },
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                ..Default::default()
-                            },
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                ..Default::default()
-                            },
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                ..Default::default()
-                            },
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                ..Default::default()
-                            },
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                ..Default::default()
-                            },
-                            D3D11_RENDER_TARGET_BLEND_DESC {
-                                ..Default::default()
-                            },
-                        ],
-                        ..Default::default()
-                    };
-
-                    let mut blend_state = MaybeUninit::<Option<ID3D11BlendState>>::zeroed();
-                    device.CreateBlendState(&blend_desc, Some(blend_state.as_mut_ptr())).expect("CreateBlendState failed");
-                    blend_state.assume_init().expect("CreateBlendState returned null")
-                };
-
-                // create cull none rasterizer state
-                let rasterizer_state = {
-                    let rasterizer_desc = D3D11_RASTERIZER_DESC {
-                        FillMode: D3D11_FILL_SOLID,
-                        CullMode: D3D11_CULL_NONE,
-                        DepthClipEnable: false.into(),
-                        ScissorEnable: true.into(),
-                        ..Default::default()
-                    };
-
-                    let mut rasterizer_state = MaybeUninit::<Option<ID3D11RasterizerState>>::zeroed();
-                    device.CreateRasterizerState(&rasterizer_desc, Some(rasterizer_state.as_mut_ptr())).expect("CreateRasterizerState failed");
-                    rasterizer_state.assume_init().expect("CreateRasterizerState returned null")
-                };
-
-                // create depth stencil state with no depth
-                let depth_stencil_state = {
-                    let depth_stencil_desc = D3D11_DEPTH_STENCIL_DESC {
-                        DepthEnable: false.into(),
-                        DepthWriteMask: D3D11_DEPTH_WRITE_MASK_ALL,
-                        DepthFunc: D3D11_COMPARISON_ALWAYS,
-                        StencilEnable: false.into(),
-                        FrontFace: D3D11_DEPTH_STENCILOP_DESC {
-                            StencilFailOp: D3D11_STENCIL_OP_KEEP,
-                            StencilDepthFailOp: D3D11_STENCIL_OP_KEEP,
-                            StencilPassOp: D3D11_STENCIL_OP_KEEP,
-                            StencilFunc: D3D11_COMPARISON_ALWAYS,
-                        },
-                        BackFace: D3D11_DEPTH_STENCILOP_DESC {
-                            StencilFailOp: D3D11_STENCIL_OP_KEEP,
-                            StencilDepthFailOp: D3D11_STENCIL_OP_KEEP,
-                            StencilPassOp: D3D11_STENCIL_OP_KEEP,
-                            StencilFunc: D3D11_COMPARISON_ALWAYS,
-                        },
-                        ..Default::default()
-                    };
-
-                    let mut depth_stencil_state = MaybeUninit::<Option<ID3D11DepthStencilState>>::zeroed();
-                    device.CreateDepthStencilState(&depth_stencil_desc, Some(depth_stencil_state.as_mut_ptr())).expect("CreateDepthStencilState failed");
-                    depth_stencil_state.assume_init().expect("CreateDepthStencilState returned null")
-                };
-
-                // viewport
-                let viewport = D3D11_VIEWPORT {
-                    TopLeftX: 0.0,
-                    TopLeftY: 0.0,
-                    Width: sc_desc.BufferDesc.Width as f32,
-                    Height: sc_desc.BufferDesc.Height as f32,
-                    MinDepth: 0.0,
-                    MaxDepth: 1.0,
-                };
-
-                // scissor rect
-                let scissor_rect = RECT {
-                    left: 0,
-                    top: 0,
-                    right: sc_desc.BufferDesc.Width as i32,
-                    bottom: sc_desc.BufferDesc.Height as i32,
-                };
-
-                // init render target view
-                let rtv = {
-                    let back_buffer: ID3D11Texture2D = this.GetBuffer(0).expect("failed to get back buffer");
-                    let mut rtv = None;
-
-                    device
-                        .CreateRenderTargetView(&back_buffer, None, Some(&mut rtv))
-                        .expect("failed to create render target view (CreateRenderTargetView not ok)");
-
-                    rtv.expect("failed to create render target view (was null)")
-                };
-
-                // set the cell with the initialized data
-                cell.insert(RenderData {
-                    sc_addr: &this as *const _,
-                    rtv,
-                    texture,
-                    srv,
-                    pixel_shader,
-                    vertex_shader,
-                    blend_state,
-                    rasterizer_state,
-                    depth_stencil_state,
-                    sampler,
-                    viewport,
-                    scissor_rect,
-                    buffer_width: sc_desc.BufferDesc.Width,
-                    buffer_height: sc_desc.BufferDesc.Height,
-                })
-            }
-        };
+        // borrow it as mutable now
+        let data = cell.as_mut().unwrap();
 
         let context = device.GetImmediateContext().unwrap();
-        
+
         // use a new scope here to ensure the state backup is dropped at the end,
         // thus restoring the original render state before we call the original function
         {
@@ -360,20 +168,36 @@ unsafe extern "stdcall" fn present(
             // poll to see if we have new data, and if so, update the texture
             if let Some(snapshot) = ui::poll_dirty() {
                 let mut mapped = MaybeUninit::<D3D11_MAPPED_SUBRESOURCE>::zeroed();
-                context.Map(&data.texture, 0, D3D11_MAP_WRITE_DISCARD, 0, Some(mapped.as_mut_ptr())).expect("Map failed");
+                context
+                    .Map(
+                        &data.texture,
+                        0,
+                        D3D11_MAP_WRITE_DISCARD,
+                        0,
+                        Some(mapped.as_mut_ptr()),
+                    )
+                    .expect("Map failed");
                 let mut mapped = mapped.assume_init();
 
-                let src = snapshot.data.as_ptr();
-                let dst = mapped.pData as *mut u8;
+                if snapshot.width * 4 != mapped.RowPitch
+                    || mapped.RowPitch * snapshot.height != mapped.DepthPitch
+                {
+                    warn!("latest UI snapshot does not match our current UI size, skipping update");
+                } else {
+                    let src = snapshot.data.as_ptr();
+                    let dst = mapped.pData as *mut u8;
 
-                mapped.RowPitch = snapshot.width * 4;
+                    mapped.RowPitch = snapshot.width * 4;
+                    mapped.DepthPitch = snapshot.width * snapshot.height * 4;
 
-                let size = (data.buffer_width as usize * data.buffer_height as usize * 4).min(snapshot.data.len());
-                std::ptr::copy_nonoverlapping(src, dst, size);
+                    let size = (data.buffer_width as usize * data.buffer_height as usize * 4)
+                        .min(snapshot.data.len());
+                    std::ptr::copy_nonoverlapping(src, dst, size);
 
-                context.Unmap(&data.texture, 0);
+                    context.Unmap(&data.texture, 0);
+                }
             }
-            
+
             // render the overlay
             context.RSSetViewports(Some(&[data.viewport]));
             context.RSSetScissorRects(Some(&[data.scissor_rect]));
@@ -391,7 +215,7 @@ unsafe extern "stdcall" fn present(
 
             context.OMSetBlendState(&data.blend_state, None, 0xffffffff);
             context.OMSetDepthStencilState(&data.depth_stencil_state, 0);
-            
+
             context.OMSetRenderTargets(Some(&[Some(data.rtv.clone())]), None);
 
             context.Draw(3, 0);
@@ -400,6 +224,273 @@ unsafe extern "stdcall" fn present(
         // call the original function
         original.call(this, sync_interval, present_flags)
     })
+}
+
+unsafe fn initialize_render_data<'c>(
+    this: &IDXGISwapChain,
+    mut cell: RefMut<'c, Option<RenderData>>,
+    size: Option<(u32, u32)>,
+) -> RefMut<'c, Option<RenderData>> {
+    let device: ID3D11Device2 = this.GetDevice().unwrap();
+
+    // initialize our render data for this thread (the render thread)
+    trace!("initializing RenderData (initialize_render_data)");
+
+    let (viewport_width, viewport_height) = match size {
+        Some(_) => size.unwrap(),
+        None => {
+            let sc_desc = {
+                let mut sc_desc = MaybeUninit::<DXGI_SWAP_CHAIN_DESC>::zeroed();
+                this.GetDesc(sc_desc.as_mut_ptr())
+                    .expect("failed to get DXGI_SWAP_CHAIN_DESC");
+                sc_desc.assume_init()
+            };
+
+            (sc_desc.BufferDesc.Width, sc_desc.BufferDesc.Height)
+        }
+    };
+
+    let texture = {
+        let texture_desc = D3D11_TEXTURE2D_DESC {
+            Width: viewport_width,
+            Height: viewport_height,
+            MipLevels: 1,
+            ArraySize: 1,
+            // despite our input image being BGRA, it seems faster to specify
+            // RGBA here and then swizzle the channels in the pixel shader,
+            // likely because the game's native format is RGBA? idk
+            // it could be placebo, but we'll roll with it
+            Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+            SampleDesc: DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Usage: D3D11_USAGE_DYNAMIC,
+            BindFlags: D3D11_BIND_SHADER_RESOURCE,
+            CPUAccessFlags: D3D11_CPU_ACCESS_WRITE,
+            ..Default::default()
+        };
+
+        let mut tex = MaybeUninit::<Option<ID3D11Texture2D>>::zeroed();
+        device
+            .CreateTexture2D(&texture_desc, None, Some(tex.as_mut_ptr()))
+            .expect("CreateTexture2D failed");
+        tex.assume_init().expect("CreateTexture2D returned null")
+    };
+
+    // create the shader resource view
+    let srv = {
+        let srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
+            Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+            ViewDimension: D3D11_SRV_DIMENSION_TEXTURE2D,
+            Anonymous: D3D11_SHADER_RESOURCE_VIEW_DESC_0 {
+                Texture2D: D3D11_TEX2D_SRV {
+                    MostDetailedMip: 0,
+                    MipLevels: 1,
+                },
+            },
+        };
+
+        let mut srv = MaybeUninit::<Option<ID3D11ShaderResourceView>>::zeroed();
+        device
+            .CreateShaderResourceView(&texture, Some(&srv_desc), Some(srv.as_mut_ptr()))
+            .expect("CreateShaderResourceView failed");
+        srv.assume_init()
+            .expect("CreateShaderResourceView returned null")
+    };
+
+    // create the pixel shader
+    let pixel_shader = {
+        let ps_bytecode = include_bytes!("shaders/ps.cso");
+        let mut ps = MaybeUninit::<Option<ID3D11PixelShader>>::zeroed();
+        device
+            .CreatePixelShader(ps_bytecode, None, Some(ps.as_mut_ptr()))
+            .expect("CreatePixelShader failed");
+        ps.assume_init().expect("CreatePixelShader returned null")
+    };
+
+    // create the vertex shader
+    let vertex_shader = {
+        let vs_bytecode = include_bytes!("shaders/vs.cso");
+        let mut vs = MaybeUninit::<Option<ID3D11VertexShader>>::zeroed();
+        device
+            .CreateVertexShader(vs_bytecode, None, Some(vs.as_mut_ptr()))
+            .expect("CreateVertexShader failed");
+        vs.assume_init().expect("CreateVertexShader returned null")
+    };
+
+    // create the linear clamp sampler
+    let sampler = {
+        let sampler_desc = D3D11_SAMPLER_DESC {
+            Filter: D3D11_FILTER_MIN_MAG_MIP_POINT,
+            AddressU: D3D11_TEXTURE_ADDRESS_CLAMP,
+            AddressV: D3D11_TEXTURE_ADDRESS_CLAMP,
+            AddressW: D3D11_TEXTURE_ADDRESS_CLAMP,
+            ComparisonFunc: D3D11_COMPARISON_ALWAYS,
+            MinLOD: 0.0,
+            MaxLOD: 1.0,
+            MipLODBias: 0.0,
+            MaxAnisotropy: 0,
+            BorderColor: [0.0; 4],
+        };
+
+        let mut sampler = MaybeUninit::<Option<ID3D11SamplerState>>::zeroed();
+        device
+            .CreateSamplerState(&sampler_desc, Some(sampler.as_mut_ptr()))
+            .expect("CreateSamplerState failed");
+        sampler
+            .assume_init()
+            .expect("CreateSamplerState returned null")
+    };
+
+    // create alpha blend state
+    let blend_state = {
+        let blend_desc = D3D11_BLEND_DESC {
+            AlphaToCoverageEnable: false.into(),
+            RenderTarget: [
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    BlendEnable: true.into(),
+                    SrcBlend: D3D11_BLEND_SRC_ALPHA,
+                    DestBlend: D3D11_BLEND_INV_SRC_ALPHA,
+                    BlendOp: D3D11_BLEND_OP_ADD,
+                    SrcBlendAlpha: D3D11_BLEND_INV_SRC_ALPHA,
+                    DestBlendAlpha: D3D11_BLEND_ZERO,
+                    BlendOpAlpha: D3D11_BLEND_OP_ADD,
+                    RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL.0 as u8,
+                },
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    ..Default::default()
+                },
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    ..Default::default()
+                },
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    ..Default::default()
+                },
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    ..Default::default()
+                },
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    ..Default::default()
+                },
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    ..Default::default()
+                },
+                D3D11_RENDER_TARGET_BLEND_DESC {
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mut blend_state = MaybeUninit::<Option<ID3D11BlendState>>::zeroed();
+        device
+            .CreateBlendState(&blend_desc, Some(blend_state.as_mut_ptr()))
+            .expect("CreateBlendState failed");
+        blend_state
+            .assume_init()
+            .expect("CreateBlendState returned null")
+    };
+
+    // create cull none rasterizer state
+    let rasterizer_state = {
+        let rasterizer_desc = D3D11_RASTERIZER_DESC {
+            FillMode: D3D11_FILL_SOLID,
+            CullMode: D3D11_CULL_NONE,
+            DepthClipEnable: false.into(),
+            ScissorEnable: true.into(),
+            ..Default::default()
+        };
+
+        let mut rasterizer_state = MaybeUninit::<Option<ID3D11RasterizerState>>::zeroed();
+        device
+            .CreateRasterizerState(&rasterizer_desc, Some(rasterizer_state.as_mut_ptr()))
+            .expect("CreateRasterizerState failed");
+        rasterizer_state
+            .assume_init()
+            .expect("CreateRasterizerState returned null")
+    };
+
+    // create depth stencil state with no depth
+    let depth_stencil_state = {
+        let depth_stencil_desc = D3D11_DEPTH_STENCIL_DESC {
+            DepthEnable: false.into(),
+            DepthWriteMask: D3D11_DEPTH_WRITE_MASK_ALL,
+            DepthFunc: D3D11_COMPARISON_ALWAYS,
+            StencilEnable: false.into(),
+            FrontFace: D3D11_DEPTH_STENCILOP_DESC {
+                StencilFailOp: D3D11_STENCIL_OP_KEEP,
+                StencilDepthFailOp: D3D11_STENCIL_OP_KEEP,
+                StencilPassOp: D3D11_STENCIL_OP_KEEP,
+                StencilFunc: D3D11_COMPARISON_ALWAYS,
+            },
+            BackFace: D3D11_DEPTH_STENCILOP_DESC {
+                StencilFailOp: D3D11_STENCIL_OP_KEEP,
+                StencilDepthFailOp: D3D11_STENCIL_OP_KEEP,
+                StencilPassOp: D3D11_STENCIL_OP_KEEP,
+                StencilFunc: D3D11_COMPARISON_ALWAYS,
+            },
+            ..Default::default()
+        };
+
+        let mut depth_stencil_state = MaybeUninit::<Option<ID3D11DepthStencilState>>::zeroed();
+        device
+            .CreateDepthStencilState(&depth_stencil_desc, Some(depth_stencil_state.as_mut_ptr()))
+            .expect("CreateDepthStencilState failed");
+        depth_stencil_state
+            .assume_init()
+            .expect("CreateDepthStencilState returned null")
+    };
+
+    // viewport
+    let viewport = D3D11_VIEWPORT {
+        TopLeftX: 0.0,
+        TopLeftY: 0.0,
+        Width: viewport_width as f32,
+        Height: viewport_height as f32,
+        MinDepth: 0.0,
+        MaxDepth: 1.0,
+    };
+
+    // scissor rect
+    let scissor_rect = RECT {
+        left: 0,
+        top: 0,
+        right: viewport_width as i32,
+        bottom: viewport_height as i32,
+    };
+
+    // init render target view
+    let rtv = {
+        let back_buffer: ID3D11Texture2D = this.GetBuffer(0).expect("failed to get back buffer");
+        let mut rtv = None;
+
+        device
+            .CreateRenderTargetView(&back_buffer, None, Some(&mut rtv))
+            .expect("failed to create render target view (CreateRenderTargetView not ok)");
+
+        rtv.expect("failed to create render target view (was null)")
+    };
+
+    // set the cell with the initialized data
+    *cell = Some(RenderData {
+        sc_addr: this,
+        rtv,
+        texture,
+        srv,
+        pixel_shader,
+        vertex_shader,
+        blend_state,
+        rasterizer_state,
+        depth_stencil_state,
+        sampler,
+        viewport,
+        scissor_rect,
+        buffer_width: viewport_width,
+        buffer_height: viewport_height,
+    });
+
+    cell
 }
 
 // let (mut out, out_ptr, mut out_count) = temp_array!(D3D11_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE);
