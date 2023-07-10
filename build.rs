@@ -24,21 +24,24 @@ impl Meta {
 struct Build;
 impl Build {
     fn build_hlrt() {
-        Command::new("cmd")
-            .arg("/C")
-            .arg("pnpm")
-            .arg("install")
-            .current_dir("hlrt")
-            .spawn()
-            .expect("failed to run `pnpm install` for HLRT");
+        // only run `pnpm install` if hlrt/node_modules is absent
+        if !std::path::Path::new("hlrt").join("node_modules").exists() {
+            Command::new("cmd")
+                .arg("/C")
+                .arg("pnpm")
+                .arg("install")
+                .current_dir("hlrt")
+                .spawn()
+                .expect("failed to run `pnpm install` for HLRT");
+        }
 
         Command::new("cmd")
             .arg("/C")
             .arg("pnpm")
-            .arg("build")
+            .arg("build-if-changed")
             .current_dir("hlrt")
             .spawn()
-            .expect("failed to run `pnpm build` for HLRT");
+            .expect("failed to run `pnpm build-if-changed` for HLRT");
     }
 }
 

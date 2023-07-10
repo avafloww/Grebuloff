@@ -14,7 +14,9 @@
     "typecheck": "pnpm run --parallel \"/^typecheck:.*$/\"",
     "start": "electron-vite preview",
     "dev": "electron-vite dev --sourcemap",
-    "build": "run-if-changed -f out/**/* --checksumfile=.checksums -c \"pnpm run typecheck && electron-vite build && electron-packager . --platform=win32 --out=../dist --executable-name=grebuloff-hlrt --overwrite\""
+    "dev:renderer": "cross-env LLRT_PIPE_ID=dev electron-vite dev --sourcemap --rendererOnly",
+    "build": "pnpm run typecheck && electron-vite build && electron-packager . --platform=win32 --out=../dist --executable-name=grebuloff-hlrt --overwrite",
+    "build-if-changed": "build-if-changed"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^1.0.2",
@@ -33,6 +35,8 @@
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.61.0",
     "@vitejs/plugin-react": "^4.0.1",
+    "build-if-changed": "^1.5.5",
+    "cross-env": "^7.0.3",
     "electron": "^25.2.0",
     "electron-packager": "^17.1.1",
     "electron-vite": "^1.0.24",
@@ -41,8 +45,12 @@
     "eslint-plugin-prettier": "^4.2.1",
     "eslint-plugin-react": "^7.32.2",
     "prettier": "^2.8.8",
-    "run-if-changed": "^0.0.9",
     "typescript": "^5.1.6",
     "vite": "^4.3.9"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "build-if-changed@1.5.5": "patches/build-if-changed@1.5.5.patch"
+    }
   }
 }

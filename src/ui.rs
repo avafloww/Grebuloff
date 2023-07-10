@@ -1,12 +1,81 @@
+use crate::{
+    get_execution_id,
+    rpc::ui::{ImageFormat, UiRpcServerboundPaint},
+};
+use anyhow::{bail, Result};
 use bytes::Bytes;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
+use log::{error, info, warn};
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    process::Command,
 };
 
-use crate::rpc::ui::{ImageFormat, UiRpcServerboundPaint};
-
 static LATEST_BUFFER: Mutex<Option<UiBuffer>> = Mutex::new(None);
+
+pub async fn spawn_ui_host(runtime_dir: &PathBuf) -> Result<()> {
+    loop {
+        info!(
+            "spawning HLRT process (runtime dir: {})",
+            runtime_dir.to_str().unwrap()
+        );
+
+        let mut builder = Command::new(
+            Path::new(runtime_dir)
+                .join("grebuloff-hlrt-win32-x64")
+                .join("grebuloff-hlrt.exe"),
+        );
+
+        builder.stdout(Stdio::piped());
+        builder.stderr(Stdio::piped());
+        builder.env("LLRT_PIPE_ID", get_execution_id());
+
+        #[cfg(debug_assertions)]
+        {
+            // in debug builds, we want to use the local dev server
+            // todo: this should probably be configurable
+            builder.env("ELECTRON_RENDERER_URL", "http://localhost:5173/");
+        }
+
+        if let Ok(mut process) = builder.spawn() {
+            info!("spawned HLRT process with pid {:?}", process.id());
+
+            let mut stdout = BufReader::new(process.stdout.take().unwrap()).lines();
+            let mut stderr = BufReader::new(process.stderr.take().unwrap()).lines();
+
+            loop {
+                tokio::select! {
+                    out = stdout.next_line() => {
+                        if let Ok(Some(line)) = out {
+                            info!("[hlrt:out] {}", line);
+                        }
+                    },
+                    err = stderr.next_line() => {
+                        if let Ok(Some(line)) = err {
+                            warn!("[hlrt:err] {}", line);
+                        }
+                    },
+                    status = process.wait() => {
+                        info!("[hlrt:exit] HLRT process exited with status {}", status.unwrap());
+                        break;
+                    }
+                }
+            }
+        } else {
+            error!("failed to spawn HLRT process");
+            bail!("failed to spawn HLRT process");
+        }
+    }
+
+    Ok(())
+}
 
 pub fn poll_dirty() -> Option<UiBufferSnapshot> {
     let mut lock = LATEST_BUFFER.lock().unwrap();

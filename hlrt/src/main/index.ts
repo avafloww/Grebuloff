@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { app, BrowserWindow } from 'electron';
 import { join } from 'path';
-import { optimizer, is } from '@electron-toolkit/utils';
+import { optimizer } from '@electron-toolkit/utils';
 import { RpcClient } from './rpc/client';
 
 // force a scale factor of 1, even on high-DPI displays, as we will control scaling ourselves
@@ -32,6 +32,7 @@ app.whenReady().then(() => {
     title: 'Grebuloff UI Host',
     autoHideMenuBar: true,
     transparent: true,
+    backgroundColor: 'transparent',
     frame: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -60,8 +61,17 @@ app.whenReady().then(() => {
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    const tryLoad = async (url: string) => {
+      try {
+        await mainWindow.loadURL(url);
+      } catch (e) {
+        console.error(`failed to load ${url}: ${e}`);
+        setTimeout(() => tryLoad(url), 1000);
+      }
+    };
+
+    tryLoad(process.env['ELECTRON_RENDERER_URL']);
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }

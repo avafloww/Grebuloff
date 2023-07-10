@@ -1,0 +1,28 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+deleted file mode 100644
+index cb8bc80d7e68e5704d7d7e43529bc608c2902728..0000000000000000000000000000000000000000
+diff --git a/lib/gitignore.js b/lib/gitignore.js
+index 15c2c620b28ba9ea907d833e511ebfe9047d9f0e..eef9128dfa7535bd56a0f5922dc5c001e9814bc7 100644
+--- a/lib/gitignore.js
++++ b/lib/gitignore.js
+@@ -20,6 +20,7 @@ class GitIgnore {
+         this.matchRootGlobs = recrawl_1.createMatcher(rootGlobs);
+     }
+     test(file, name) {
++        return false;
+         if (!path_1.isAbsolute(file)) {
+             throw Error('Expected an absolute path');
+         }
+diff --git a/lib/index.js b/lib/index.js
+index 5e2615dae3c000e72ed93613efb9279aabee42f2..f441e21a1e0d7dbaa98915e3b95d4dce4debbafb 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -195,7 +195,7 @@ function getLines(data) {
+         .split(/\r?\n/);
+ }
+ function getRunner(root) {
+-    return fs.isFile(path_1.join(root, 'package-lock.json')) ? 'npm' : 'yarn';
++    return 'pnpm';
+ }
+ function filterTruthy(changed) {
+     return changed.filter(Boolean);

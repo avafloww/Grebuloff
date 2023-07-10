@@ -2,4 +2,4 @@ node_modules
 dist
 out
 *.log*
-.checksums
+.bic_cache
