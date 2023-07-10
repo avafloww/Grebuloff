@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { app, BrowserWindow } from 'electron';
 import { join } from 'path';
 import { optimizer, is } from '@electron-toolkit/utils';

@@ -290,8 +290,25 @@ fn main() {
     let syringe = Syringe::for_process(target);
 
     let current_exe = std::env::current_exe().unwrap();
-    let llrt_path = current_exe.join("../grebuloff_llrt.dll");
-    let grebuloff_path = current_exe.join("../");
+    let mut grebuloff_path = current_exe.parent().unwrap().to_path_buf();
+
+    #[cfg(debug_assertions)]
+    {
+        // HACK: if this is a debug build, cargo is probably executing it
+        // from the target directory. we'd rather execute from the dist
+        // directory, so we'll try to find the dist directory and use that
+        // instead.
+        if grebuloff_path.file_name().unwrap() == "debug" {
+            grebuloff_path.pop();
+            grebuloff_path.pop();
+            grebuloff_path.pop();
+            grebuloff_path.push("dist");
+
+            println!("[debug build] using grebuloff_path: {:?}", grebuloff_path);
+        }
+    }
+
+    let llrt_path = &grebuloff_path.join("grebuloff.dll");
 
     unsafe {
         if process_info.thread_handle.0 != 0 {

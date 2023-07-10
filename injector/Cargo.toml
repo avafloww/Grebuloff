@@ -1,0 +1,10 @@
+[package]
+name = "grebuloff-injector"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+windows = { workspace = true }
+dll-syringe = { workspace = true, features = ["syringe", "rpc"] }
+clap = { version = "4.3.11", features = ["derive"] }
+sysinfo = "0.29.0"

@@ -12,6 +12,17 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "composite": true
-  }
+    "composite": true,
+  },
+  "exclude": [
+    "build.cjs",
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    },
+    {
+      "path": "./tsconfig.web.json"
+    }
+  ]
 }

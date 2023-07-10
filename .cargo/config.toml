@@ -1,7 +1,14 @@
+[alias]
+inject = "run -p grebuloff-injector inject"
+launch = "run -p grebuloff-injector launch"
+
 [build]
 target = "x86_64-pc-windows-msvc"
-target-dir = "build"
+out-dir = "dist"
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"
 rustflags = "-Zshare-generics=on"
+
+[unstable]
+unstable-options = true

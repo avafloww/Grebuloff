@@ -3,22 +3,26 @@
   "version": "0.0.0",
   "description": "Grebuloff High-Level Runtime (HLRT)",
   "main": "./out/main/index.js",
+  "private": true,
+  "packageManager": "pnpm@8.6.7",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
+    "typecheck": "pnpm run --parallel \"/^typecheck:.*$/\"",
     "start": "electron-vite preview",
-    "dev": "electron-vite dev --sourcemap -- --trace-warnings",
-    "build": "pnpm run typecheck && electron-vite build && electron-packager . --platform=win32 --out=../../build/ --executable-name=grebuloff-hlrt --overwrite"
+    "dev": "electron-vite dev --sourcemap",
+    "build": "run-if-changed -f out/**/* --checksumfile=.checksums -c \"pnpm run typecheck && electron-vite build && electron-packager . --platform=win32 --out=../dist --executable-name=grebuloff-hlrt --overwrite\""
   },
   "dependencies": {
     "@electron-toolkit/utils": "^1.0.2",
     "class-transformer": "^0.5.1",
     "classnames": "^2.3.2",
     "msgpackr": "^1.9.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
@@ -33,9 +37,12 @@
     "electron-packager": "^17.1.1",
     "electron-vite": "^1.0.24",
     "eslint": "^8.44.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-prettier": "^4.2.1",
     "eslint-plugin-react": "^7.32.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "prettier": "^2.8.8",
+    "run-if-changed": "^0.0.9",
+    "typescript": "^5.1.6",
     "vite": "^4.3.9"
   }
 }

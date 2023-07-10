@@ -4,7 +4,6 @@ deps/cef_binary*
 deps/cef-sys/cef_binary*
 local/
 dist/
-build/
 
 # Rust
 target/

@@ -1,7 +1,5 @@
 use std::{error::Error, process::Command};
 
-const LIBHLRT_BASE: &str = "../build/libhlrt/dist";
-
 struct Meta;
 impl Meta {
     fn version() {
@@ -23,9 +21,32 @@ impl Meta {
     }
 }
 
+struct Build;
+impl Build {
+    fn build_hlrt() {
+        Command::new("cmd")
+            .arg("/C")
+            .arg("pnpm")
+            .arg("install")
+            .current_dir("hlrt")
+            .spawn()
+            .expect("failed to run `pnpm install` for HLRT");
+
+        Command::new("cmd")
+            .arg("/C")
+            .arg("pnpm")
+            .arg("build")
+            .current_dir("hlrt")
+            .spawn()
+            .expect("failed to run `pnpm build` for HLRT");
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     Meta::version();
     Meta::timestamp();
+
+    Build::build_hlrt();
 
     Ok(())
 }
