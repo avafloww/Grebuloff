@@ -96,14 +96,21 @@ impl FunctionHook {
     }
 }
 
-pub unsafe fn init_hooks() -> Result<()> {
+pub unsafe fn init_early_hooks() -> Result<()> {
     info!("initializing hook manager");
     HOOK_MANAGER.get_or_init(|| HookManager { hooks: Vec::new() });
 
+    info!("initializing early hooks");
+    framework::hook_framework()?;
+
+    Ok(())
+}
+
+pub unsafe fn init_hooks() -> Result<()> {
     info!("initializing hooks");
+
     swapchain::hook_swap_chain()?;
     // wndproc::hook_wndproc()?;
-    framework::hook_framework()?;
 
     Ok(())
 }

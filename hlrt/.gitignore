@@ -3,3 +3,4 @@ dist
 out
 *.log*
 .bic_cache
+electron.vite.config.*.mjs

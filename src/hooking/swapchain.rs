@@ -37,11 +37,11 @@ struct ResolvedSwapChain {
 
 vtable_functions!(impl ResolvedSwapChain {
     #[vtable_fn(8)]
-    unsafe fn present(&self, sync_interval: u32, present_flags: u32);
+    unsafe fn present(this: *mut IDXGISwapChain, sync_interval: u32, present_flags: u32);
 
     #[vtable_fn(13)]
     unsafe fn resize_buffers(
-        &self,
+        this: *mut IDXGISwapChain,
         buffer_count: u32,
         width: u32,
         height: u32,
@@ -65,9 +65,13 @@ unsafe fn resolve_swap_chain() -> ResolvedSwapChain {
     };
 
     debug!("device: {:p}", device);
+
     let swap_chain = (*device).swap_chain;
+    assert!(!swap_chain.is_null(), "swap chain is null");
     debug!("swap chain: {:p}", swap_chain);
+
     let dxgi_swap_chain = (*swap_chain).dxgiswap_chain as *mut *mut *mut IDXGISwapChain;
+    assert!(!dxgi_swap_chain.is_null(), "dxgi swap chain is null");
     debug!("dxgi swap chain: {:p}", *dxgi_swap_chain);
 
     ResolvedSwapChain {

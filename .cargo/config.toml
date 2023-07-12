@@ -6,9 +6,5 @@ launch = "run -p grebuloff-injector launch"
 target = "x86_64-pc-windows-msvc"
 out-dir = "dist"
 
-[target.x86_64-pc-windows-msvc]
-linker = "rust-lld.exe"
-rustflags = "-Zshare-generics=on"
-
 [unstable]
 unstable-options = true

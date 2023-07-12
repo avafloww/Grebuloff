@@ -1,42 +1,6 @@
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use std::path::Path;
 use syn::{Data, ItemFn, TraitItemFn, Type};
-use walkdir::WalkDir;
-
-#[proc_macro]
-pub fn libhlrt_js_files(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let libhlrt_dist = Path::new(env!("CARGO_MANIFEST_DIR")).join("../libhlrt/dist/");
-
-    let walker = WalkDir::new(libhlrt_dist.clone())
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .filter(|e| e.path().extension().unwrap_or_default() == "js");
-
-    let mut files = Vec::new();
-
-    for entry in walker {
-        let full_path = entry.path();
-        let specifier = full_path.strip_prefix(libhlrt_dist.clone()).unwrap();
-        let specifier = format!("libhlrt/{}", specifier.to_str().unwrap());
-        let full_path = full_path.to_str().unwrap();
-
-        files.push(quote! {
-            deno_core::ExtensionFileSource {
-                specifier: #specifier,
-                code: deno_core::ExtensionFileSourceCode::IncludedInBinary(include_str!(#full_path)),
-            },
-        });
-    }
-
-    quote! {
-        vec![
-            #(#files)*
-        ]
-    }
-    .into()
-}
 
 fn addr_table_name(name: String) -> Ident {
     format_ident!("{}AddressTable", name)
@@ -144,9 +108,7 @@ pub fn vtable_functions(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
                     match arg {
                         syn::FnArg::Receiver(_) => {
-                            // todo: receiver needs more work probably
-                            args_typed.push(quote! { *mut _ });
-                            args_named.push(quote! { self.vtable_base() as *mut std::ffi::c_void });
+                            panic!("vtable_fn functions cannot take self as an arg (you probably want to use a *const / *mut pointer)");
                         }
                         syn::FnArg::Typed(pat) => {
                             let ty = &pat.ty;
@@ -178,7 +140,7 @@ pub fn vtable_functions(input: proc_macro::TokenStream) -> proc_macro::TokenStre
                     #[doc = " # Safety"]
                     #[doc = ""]
                     #[doc = " This function is unsafe because it calls a C++ virtual function by address."]
-                    unsafe fn #fn_name (#(#args_input),*) -> #return_type {
+                    unsafe fn #fn_name (&self, #(#args_input),*) -> #return_type {
                         let address = self.address_table().#fn_name();
                         let func: extern "C" fn(#(#args_typed),*) -> #return_type = std::mem::transmute(address);
                         func(#(#args_named),*)

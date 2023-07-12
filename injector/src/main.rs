@@ -344,7 +344,7 @@ fn main() {
 
     println!("calling entrypoint...");
     let remote_load =
-        unsafe { syringe.get_payload_procedure::<fn(Vec<u8>)>(injected_payload, "init_native") }
+        unsafe { syringe.get_payload_procedure::<fn(Vec<u8>)>(injected_payload, "init_injected") }
             .unwrap()
             .unwrap();
     let str_as_vec = grebuloff_path.to_str().unwrap().as_bytes().to_vec();

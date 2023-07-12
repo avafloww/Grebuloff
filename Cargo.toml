@@ -44,8 +44,8 @@ chrono = { workspace = true }
 # Workspace #
 #############
 [workspace]
-members = [".", "macros", "injector"]
-default-members = [".", "injector"]
+members = [".", "macros", "injector", "loader"]
+default-members = [".", "injector", "loader"]
 
 [workspace.dependencies]
 dll-syringe = { version = "0.15.2", default-features = false }
@@ -65,6 +65,7 @@ features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_LibraryLoader",
     "Win32_System_ProcessStatus",
+    "Win32_System_SystemServices",
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",

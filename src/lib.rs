@@ -1,7 +1,6 @@
 mod dalamud;
 mod hooking;
 mod resolvers;
-// mod runtime;
 mod rpc;
 mod ui;
 
@@ -15,46 +14,59 @@ use crate::{
     rpc::{ui::UiRpcServer, RpcServer},
 };
 use anyhow::Result;
-use log::{error, info, trace};
+use log::{debug, error, info};
 use msgbox::IconType;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::thread;
-use tokio::{task, time};
+use std::{ffi::CString, path::PathBuf};
+use tokio::task;
 
 static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static DALAMUD_PIPE: OnceLock<DalamudPipe> = OnceLock::new();
 static EXEC_ID: OnceLock<String> = OnceLock::new();
+static RUNTIME_DIR: OnceLock<PathBuf> = OnceLock::new();
+static LOAD_METHOD: OnceLock<GrebuloffLoadMethod> = OnceLock::new();
 
 dll_syringe::payload_procedure! {
-    fn init_native(runtime_dir: Vec<u8>) {
-        init_sync(runtime_dir, None)
+    fn init_injected(runtime_dir: CString) {
+        init_sync_rt(&runtime_dir, None)
     }
 }
 
 dll_syringe::payload_procedure! {
-    fn init_dalamud(runtime_dir: Vec<u8>, dalamud_pipe_name: Vec<u8>) {
-        init_sync(runtime_dir, Some(dalamud_pipe_name))
+    fn init_dalamud(runtime_dir: CString, dalamud_pipe_name: CString) {
+        init_sync_rt(&runtime_dir, Some(&dalamud_pipe_name))
     }
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn init_loader(runtime_dir: &CString) {
+    LOAD_METHOD.set(GrebuloffLoadMethod::Loader).unwrap();
+    init_sync_rt(runtime_dir, None)
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GrebuloffLoadMethod {
-    Native,
+    Loader,
+    Injected,
     Dalamud,
 }
 
-pub fn get_load_method() -> GrebuloffLoadMethod {
-    if let Some(_) = DALAMUD_PIPE.get() {
-        return GrebuloffLoadMethod::Dalamud;
+impl GrebuloffLoadMethod {
+    pub fn controls_its_own_destiny(self) -> bool {
+        match self {
+            GrebuloffLoadMethod::Dalamud => false,
+            _ => true,
+        }
     }
+}
 
-    GrebuloffLoadMethod::Native
+pub fn get_load_method() -> GrebuloffLoadMethod {
+    *LOAD_METHOD.get().unwrap()
 }
 
 pub fn get_execution_id() -> String {
-    // EXEC_ID.get().unwrap().clone()
-    "dev".to_owned()
+    EXEC_ID.get().unwrap().clone()
 }
 
 fn setup_logging(dir: &PathBuf) {
@@ -111,16 +123,28 @@ fn setup_logging(dir: &PathBuf) {
     }));
 }
 
-fn init_sync(runtime_dir: Vec<u8>, dalamud_pipe_name: Option<Vec<u8>>) {
+fn init_sync_rt(runtime_dir: &CString, dalamud_pipe_name: Option<&CString>) {
+    if LOAD_METHOD.get().is_none() {
+        LOAD_METHOD
+            .set(if dalamud_pipe_name.is_some() {
+                GrebuloffLoadMethod::Dalamud
+            } else {
+                GrebuloffLoadMethod::Injected
+            })
+            .unwrap();
+    }
+
     // generate an execution ID used for pipe communication
     EXEC_ID
         .set(uuid::Uuid::new_v4().to_string())
         .expect("failed to set execution ID");
 
-    let runtime_dir = PathBuf::from(std::str::from_utf8(&runtime_dir).unwrap());
+    let runtime_dir = PathBuf::from(std::str::from_utf8(runtime_dir.as_bytes()).unwrap());
 
     // set up logging early
     setup_logging(&runtime_dir);
+
+    RUNTIME_DIR.set(runtime_dir).unwrap();
 
     // set up the tokio runtime
     TOKIO_RT
@@ -135,24 +159,58 @@ fn init_sync(runtime_dir: Vec<u8>, dalamud_pipe_name: Option<Vec<u8>>) {
     let tokio_rt = TOKIO_RT.get().unwrap();
 
     // run the sync init on the tokio runtime
-    tokio_rt.block_on(init_sync_on_tokio(runtime_dir, dalamud_pipe_name));
+    tokio_rt.block_on(init_sync_early(
+        dalamud_pipe_name
+            .map(CString::as_bytes)
+            .map(std::str::from_utf8)
+            .transpose()
+            .unwrap(),
+    ));
 }
 
-async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<u8>>) {
+async fn init_sync_early(dalamud_pipe_name: Option<&str>) {
     if let Some(pipe_name) = dalamud_pipe_name {
         DALAMUD_PIPE
-            .set(DalamudPipe::new(std::str::from_utf8(&pipe_name).unwrap()))
+            .set(DalamudPipe::new(&pipe_name))
             .expect("failed to set Dalamud pipe");
     }
 
     info!("--------------------------------------------------");
     info!(
-        "Grebuloff Low-Level Runtime starting (load method: {:?}, execution ID: {})",
+        "Grebuloff Low-Level Runtime starting (load method: {:?})",
         get_load_method(),
-        get_execution_id()
     );
     info!("Build time: {}", env!("BUILD_TIMESTAMP"));
     info!("Git commit: {}", env!("GIT_DESCRIBE"));
+    info!("Execution ID: {}", get_execution_id());
+
+    // resolve clientstructs
+    unsafe { resolvers::init_resolvers(get_load_method()) }
+        .await
+        .expect("failed to init resolvers");
+
+    // initialize early hooks (framework)
+    unsafe { hooking::init_early_hooks() }.expect("failed to init early hooks");
+
+    match get_load_method() {
+        GrebuloffLoadMethod::Loader => {
+            // if we're loaded by the loader, we're loading very early
+            // into the game's boot process. we need to wait for
+            // Framework::Tick to be called by the game, so we just
+            // return here and wait for the game to call us back
+            debug!("waiting for framework tick before continuing init");
+        }
+        _ => {
+            // if we're loaded by anything else, we're loading later
+            // into the boot process, so we shouldn't wait - call
+            // init_sync_late now
+            init_sync_late().await;
+        }
+    }
+}
+
+pub async fn init_sync_late() {
+    info!("late sync init starting");
 
     // start attempting connection to the Dalamud pipe, if applicable
     if let Some(pipe) = DALAMUD_PIPE.get() {
@@ -160,32 +218,21 @@ async fn init_sync_on_tokio(runtime_dir: PathBuf, dalamud_pipe_name: Option<Vec<
     }
 
     // handle anything that needs to be loaded sync first
-    // resolve clientstructs
-    unsafe { resolvers::init_resolvers(get_load_method()) }
-        .await
-        .expect("failed to init resolvers");
-
     // core hooks
     unsafe { hooking::init_hooks() }.expect("failed to init hooks");
 
-    // core js runtime
-    // runtime::init_hlrt(&runtime_dir)
-    //     .await
-    //     .expect("failed to init core runtime");
-
     // call async init now
-    task::spawn(init_async(runtime_dir));
+    task::spawn(init_async());
 }
 
-async fn init_async(runtime_dir: PathBuf) -> Result<()> {
+async fn init_async() -> Result<()> {
     info!("async init starting");
 
     // start RPC for the UI server
     task::spawn(async { UiRpcServer::instance().listen_forever().await });
 
     // start the UI server itself
-    let rt_dir = runtime_dir.clone();
-    task::spawn(async move { ui::spawn_ui_host(&rt_dir).await });
+    task::spawn(async move { ui::spawn_ui_host(RUNTIME_DIR.get().clone().unwrap()).await });
 
     // run the main loop
     // this is the last thing that should be called in init_async

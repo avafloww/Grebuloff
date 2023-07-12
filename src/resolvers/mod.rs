@@ -13,10 +13,10 @@ pub async unsafe fn init_resolvers(load_method: GrebuloffLoadMethod) -> Result<(
     ffxiv_client_structs::resolve_all_async(
         native::resolve_vtable,
         native::resolve_static_address,
-        if load_method == GrebuloffLoadMethod::Dalamud {
-            dalamud::resolve_member_function
-        } else {
+        if load_method.controls_its_own_destiny() {
             native::resolve_member_function
+        } else {
+            dalamud::resolve_member_function
         },
     )
     .await;
@@ -26,10 +26,10 @@ pub async unsafe fn init_resolvers(load_method: GrebuloffLoadMethod) -> Result<(
 
 /// Internal helper function used by the `resolve_signature` macro.
 pub unsafe fn resolve_member_function(input: &MemberFunctionSignature) -> *const u8 {
-    if get_load_method() == GrebuloffLoadMethod::Dalamud {
-        dalamud::resolve_member_function(input)
-    } else {
+    if get_load_method().controls_its_own_destiny() {
         native::resolve_member_function(input)
+    } else {
+        dalamud::resolve_member_function(input)
     }
 }
 

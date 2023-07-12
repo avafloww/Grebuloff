@@ -1,0 +1,13 @@
+[package]
+name = "loader"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+crate-type = ["cdylib"]
+name = "winhttp"
+
+[dependencies]
+plthook = "0.2.2"
+windows = { workspace = true }
