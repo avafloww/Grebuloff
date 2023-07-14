@@ -57,6 +57,9 @@ devDependencies:
   build-if-changed:
     specifier: ^1.5.5
     version: 1.5.5(patch_hash=ae6edl3wnffr2fktryzoqxouge)
+  cargo-cp-artifact:
+    specifier: ^0.1
+    version: 0.1.0
   cross-env:
     specifier: ^7.0.3
     version: 7.0.3
@@ -1336,6 +1339,11 @@ packages:
 
   /caniuse-lite@1.0.30001514:
     resolution: {integrity: sha512-ENcIpYBmwAAOm/V2cXgM7rZUrKKaqisZl4ZAI520FIkqGXUxJjmaIssbRW5HVVR5tyV6ygTLIm15aU8LUmQSaQ==}
+    dev: true
+
+  /cargo-cp-artifact@0.1.0:
+    resolution: {integrity: sha512-29+tOXvPWghDESqMZMFGIEtmNCn1lbkLyUPIBLXs0qO4eYFcVnN73t4hqQ9Btye4aUQjabZQQPsUtxHE6AqzUg==}
+    hasBin: true
     dev: true
 
   /chalk@2.4.2:

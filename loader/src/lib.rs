@@ -2,10 +2,15 @@ use plthook::{ObjectFile, Replacement};
 use std::{
     ffi::{c_void, CString},
     mem::ManuallyDrop,
+    os::windows::prelude::OsStringExt,
 };
 use windows::{
-    core::PCSTR,
-    Win32::{Foundation::HANDLE, System::LibraryLoader::LoadLibraryA},
+    core::{ComInterface, PCSTR},
+    Win32::{
+        Foundation::HANDLE,
+        Graphics::Dxgi::IDXGIFactory2,
+        System::LibraryLoader::{GetModuleFileNameW, LoadLibraryA},
+    },
 };
 use windows::{
     core::{HRESULT, HSTRING},
@@ -19,10 +24,13 @@ use windows::{
     },
 };
 
+const ROOT_ENV_VAR: &'static str = "GREBULOFF_ROOT";
+const ROOT_FILE: &'static str = "grebuloff_root.txt";
+
 const ERROR_NO_ROOT: &'static str = r#"Could not find the Grebuloff root directory!
 
 We checked the following locations:
-1. "GREBULOFF_PATH" environment variable passed to the game executable
+1. "GREBULOFF_ROOT" environment variable passed to the game executable
 2. "grebuloff_root.txt" in the same directory as the game executable
 3. The default installation directory: %AppData%\Grebuloff
 
@@ -101,7 +109,7 @@ The game will now exit."#,
 }
 
 unsafe extern "system" fn create_dxgi_factory_wrapper(
-    riid: *const (),
+    _riid: *const (),
     pp_factory: *mut *mut c_void,
 ) -> HRESULT {
     // remove the IAT hook now that we've been called
@@ -116,17 +124,18 @@ unsafe extern "system" fn create_dxgi_factory_wrapper(
     load_grebuloff();
 
     // call CreateDXGIFactory1 from dxgi.dll
-    // we use CreateDXGIFactory1 instead of CreateDXGIFactory, to create a DXGI 1.1 factory,
-    // as opposed to the DXGI 1.0 factory that the game creates
-    // this shouldn't break anything, but it does allow us to use surface sharing in the future,
-    // for high-performance UI rendering
+    // we use CreateDXGIFactory1 instead of CreateDXGIFactory, passing in IDXGIFactory2 as the riid,
+    // to create a DXGI 1.2 factory, as opposed to the DXGI 1.0 factory that the game creates
+    // this shouldn't break anything, but it does allow us to use surface sharing from Chromium
+    // (once we implement that), for high-performance UI rendering
     let dxgi_dll = LoadLibraryA(PCSTR::from_raw(b"dxgi.dll\0".as_ptr())).unwrap();
-    let original_func: Option<fn(*const (), *mut *mut c_void) -> HRESULT> =
+    let original_func: Option<fn(*const _, *mut *mut c_void) -> HRESULT> =
         GetProcAddress(dxgi_dll, PCSTR::from_raw(b"CreateDXGIFactory1\0".as_ptr()))
             .map(|func| std::mem::transmute(func));
 
+    // CreateDXGIFactory1()
     match original_func {
-        Some(original_func) => original_func(riid, pp_factory),
+        Some(original_func) => original_func(&IDXGIFactory2::IID, pp_factory),
         None => {
             display_error("...huh? failed to find CreateDXGIFactory1 in dxgi.dll...");
             std::process::exit(4);
@@ -173,8 +182,27 @@ fn get_grebuloff_root() -> GrebuloffRoot {
     // 2. `grebuloff_root.txt` in the same directory as the game's EXE
     // 3. default to %AppData%\Grebuloff
     // if none of these exist, we can't continue - display an error message and exit
-    std::env::var("GREBULOFF_ROOT")
-        .or_else(|_| std::fs::read_to_string("grebuloff_root.txt").map(|s| s.trim().to_owned()))
+    std::env::var(ROOT_ENV_VAR)
+        .or_else(|_| {
+            // usually we'll be in the game directory, but we might not be
+            // ensure we search for grebuloff_root.txt in the game directory
+            let game_dir = unsafe {
+                let mut exe_path = [0u16; 1024];
+                let exe_path_len = GetModuleFileNameW(None, &mut exe_path);
+
+                std::path::PathBuf::from(std::ffi::OsString::from_wide(
+                    &exe_path[..exe_path_len as usize],
+                ))
+            };
+
+            std::fs::read_to_string(
+                game_dir
+                    .parent()
+                    .map(|p| p.join(ROOT_FILE))
+                    .unwrap_or(ROOT_FILE.into()),
+            )
+            .map(|s| s.trim().to_owned())
+        })
         .or_else(|_| {
             if let Ok(appdata) = std::env::var("APPDATA") {
                 let mut path = std::path::PathBuf::from(appdata);

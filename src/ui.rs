@@ -1,9 +1,7 @@
-use crate::{
-    get_execution_id,
-    rpc::ui::{ImageFormat, UiRpcServerboundPaint},
-};
+use crate::get_execution_id;
 use anyhow::{bail, Result};
 use bytes::Bytes;
+use grebuloff_rpc::ui::{ImageFormat, UiRpcServerboundPaint};
 use log::{error, info, warn};
 use std::{
     path::{Path, PathBuf},
@@ -14,7 +12,7 @@ use std::{
     },
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    io::{AsyncBufReadExt, BufReader},
     process::Command,
 };
 

@@ -1,6 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
+use grebuloff_rpc::{RpcClientboundMessage, RpcMessageDirection, RpcServerboundMessage};
 use log::{error, info};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -15,28 +16,6 @@ pub mod ui;
 
 static mut CLIENT_STATE: OnceLock<Mutex<FxHashMap<&'static str, Box<dyn Any + Send>>>> =
     OnceLock::new();
-
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum RpcMessageDirection {
-    /// Serverbound (client-to-server) communication.
-    #[serde(skip_serializing)]
-    Serverbound(RpcServerboundMessage),
-
-    /// Clientbound (server-to-client) communication.
-    #[serde(skip_deserializing)]
-    Clientbound(RpcClientboundMessage),
-}
-
-#[derive(Debug, PartialEq, Deserialize)]
-pub enum RpcServerboundMessage {
-    Ui(ui::UiRpcServerboundMessage),
-}
-
-#[derive(Debug, PartialEq, Serialize)]
-pub enum RpcClientboundMessage {
-    Ui(ui::UiRpcClientboundMessage),
-}
 
 pub struct RpcServerOptions {
     pub pipe_name: Cow<'static, str>,

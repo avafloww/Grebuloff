@@ -15,8 +15,10 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev --sourcemap",
     "dev:renderer": "cross-env LLRT_PIPE_ID=dev electron-vite dev --sourcemap --rendererOnly",
+    "build:all": "pnpm run build:native && pnpm run build:js",
     "build": "pnpm run typecheck && electron-vite build && electron-packager . --platform=win32 --out=../dist --executable-name=grebuloff-hlrt --overwrite",
-    "build-if-changed": "build-if-changed"
+    "build:native": "cargo-cp-artifact -ac grebuloff-hlrt-native out/main/native/native.node -- cargo build --message-format=json-render-diagnostics",
+    "maybe-build:js": "build-if-changed"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^1.0.2",
@@ -46,11 +48,15 @@
     "eslint-plugin-react": "^7.32.2",
     "prettier": "^2.8.8",
     "typescript": "^5.1.6",
-    "vite": "^4.3.9"
+    "vite": "^4.3.9",
+    "cargo-cp-artifact": "^0.1"
   },
   "pnpm": {
     "patchedDependencies": {
       "build-if-changed@1.5.5": "patches/build-if-changed@1.5.5.patch"
     }
-  }
+  },
+  "bic": [
+    "src"
+  ]
 }

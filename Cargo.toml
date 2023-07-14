@@ -2,7 +2,7 @@
 # LLRT #
 ########
 [package]
-name = "grebuloff"
+name = "grebuloff-llrt"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
@@ -17,16 +17,17 @@ chrono = { workspace = true }
 tokio = { workspace = true }
 windows = { workspace = true }
 anyhow = { workspace = true }
+rmp = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bytes = { workspace = true }
 dll-syringe = { workspace = true, features = ["payload-utils"] }
-
 grebuloff-macros = { path = "macros" }
+grebuloff-rpc = { path = "rpc" }
 ffxiv_client_structs = { path = "deps/FFXIVClientStructs/rust/lib", features = ["async-resolution"] }
 ffxiv_client_structs_macros = { path = "deps/FFXIVClientStructs/rust/macros" }
 msgbox = "0.7.0"
-rmp = "0.8.11"
-rmp-serde = "1.1.1"
-serde = { version = "1.0.155", features = ["derive"] }
-serde_json = "1.0.96"
 # deno_core = "0.191.0"
 # deno_ast = { version = "0.27.1", features = ["transpiling"] }
 inventory = "0.3.6"
@@ -34,7 +35,6 @@ itertools = "0.10.5"
 rustc-hash = "1.1.0"
 retour = { version = "0.3.0", features = ["static-detour"] }
 uuid = { version = "1.4.0", features = ["v4", "fast-rng"] }
-bytes = "1.4.0"
 async-trait = "0.1.71"
 
 [build-dependencies]
@@ -44,8 +44,8 @@ chrono = { workspace = true }
 # Workspace #
 #############
 [workspace]
-members = [".", "macros", "injector", "loader"]
-default-members = [".", "injector", "loader"]
+members = [".", "macros", "injector", "loader", "rpc", "hlrt"]
+default-members = [".", "injector", "loader", "rpc", "hlrt"]
 
 [workspace.dependencies]
 dll-syringe = { version = "0.15.2", default-features = false }
@@ -54,6 +54,11 @@ anyhow = { version = "1.0.71" }
 log = { version = "0.4" }
 fern = { version = "0.6.2" }
 chrono = { version = "0.4.26" }
+rmp = "0.8.11"
+rmp-serde = "1.1.1"
+serde = { version = "1.0.155", features = ["derive"] }
+serde_json = "1.0.96"
+bytes = "1.4.0"
 
 [workspace.dependencies.windows]
 version = "0.48.0"

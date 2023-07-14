@@ -38,10 +38,10 @@ impl Build {
         Command::new("cmd")
             .arg("/C")
             .arg("pnpm")
-            .arg("build-if-changed")
+            .arg("maybe-build:js")
             .current_dir("hlrt")
             .spawn()
-            .expect("failed to run `pnpm build-if-changed` for HLRT");
+            .expect("failed to run `pnpm maybe-build:js` for HLRT");
     }
 }
 

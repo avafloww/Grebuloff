@@ -1,0 +1,15 @@
+[package]
+name = "grebuloff-rpc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true }
+rmp = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bytes = { workspace = true }
+async-trait = "0.1.71"
