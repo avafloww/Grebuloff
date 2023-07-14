@@ -1,6 +1,0 @@
-build
-out
-node_modules
-pnpm-lock.yaml
-tsconfig.json
-tsconfig.*.json
