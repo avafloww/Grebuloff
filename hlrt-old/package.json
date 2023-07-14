@@ -1,0 +1,62 @@
+{
+  "name": "grebuloff-hlrt",
+  "version": "0.0.0",
+  "description": "Grebuloff High-Level Runtime (HLRT)",
+  "main": "./out/main/index.js",
+  "private": true,
+  "packageManager": "pnpm@8.6.7",
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "format": "prettier --write .",
+    "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "pnpm run --parallel \"/^typecheck:.*$/\"",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev --sourcemap",
+    "dev:renderer": "cross-env LLRT_PIPE_ID=dev electron-vite dev --sourcemap --rendererOnly",
+    "build:all": "pnpm run build:native && pnpm run build:js",
+    "build": "pnpm run typecheck && electron-vite build && electron-packager . --platform=win32 --out=../dist --executable-name=grebuloff-hlrt --overwrite",
+    "build:native": "cargo-cp-artifact -ac grebuloff-hlrt-native out/main/native/native.node -- cargo build --message-format=json-render-diagnostics",
+    "maybe-build:js": "build-if-changed"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^1.0.2",
+    "class-transformer": "^0.5.1",
+    "classnames": "^2.3.2",
+    "msgpackr": "^1.9.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "reflect-metadata": "^0.1.13"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.3.67",
+    "@types/node": "^20.3.3",
+    "@types/react": "^18.2.14",
+    "@types/react-dom": "^18.2.6",
+    "@typescript-eslint/eslint-plugin": "^5.61.0",
+    "@typescript-eslint/parser": "^5.61.0",
+    "@vitejs/plugin-react": "^4.0.1",
+    "build-if-changed": "^1.5.5",
+    "cross-env": "^7.0.3",
+    "electron": "^25.2.0",
+    "electron-packager": "^17.1.1",
+    "electron-vite": "^1.0.24",
+    "eslint": "^8.44.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-react": "^7.32.2",
+    "prettier": "^2.8.8",
+    "typescript": "^5.1.6",
+    "vite": "^4.3.9",
+    "cargo-cp-artifact": "^0.1"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "build-if-changed@1.5.5": "patches/build-if-changed@1.5.5.patch"
+    }
+  },
+  "bic": [
+    "src"
+  ]
+}
