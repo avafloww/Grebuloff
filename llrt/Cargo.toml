@@ -1,0 +1,36 @@
+[package]
+name = "grebuloff-llrt"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+log = { workspace = true }
+fern = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+windows = { workspace = true }
+anyhow = { workspace = true }
+rmp = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bytes = { workspace = true }
+dll-syringe = { workspace = true, features = ["payload-utils"] }
+grebuloff-macros = { workspace = true }
+grebuloff-rpc = { workspace = true }
+ffxiv_client_structs = { path = "../deps/FFXIVClientStructs/rust/lib", features = ["async-resolution"] }
+ffxiv_client_structs_macros = { path = "../deps/FFXIVClientStructs/rust/macros" }
+msgbox = "0.7.0"
+inventory = "0.3.6"
+itertools = "0.10.5"
+rustc-hash = "1.1.0"
+retour = { version = "0.3.0", features = ["static-detour"] }
+uuid = { version = "1.4.0", features = ["v4", "fast-rng"] }
+async-trait = "0.1.71"
+
+[build-dependencies]
+chrono = { workspace = true }

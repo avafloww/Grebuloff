@@ -1,53 +1,15 @@
-########
-# LLRT #
-########
-[package]
-name = "grebuloff-llrt"
-version = "0.1.0"
-edition = "2021"
-build = "build.rs"
-
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-log = { workspace = true }
-fern = { workspace = true }
-chrono = { workspace = true }
-tokio = { workspace = true }
-windows = { workspace = true }
-anyhow = { workspace = true }
-rmp = { workspace = true }
-rmp-serde = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-bytes = { workspace = true }
-dll-syringe = { workspace = true, features = ["payload-utils"] }
-grebuloff-macros = { path = "macros" }
-grebuloff-rpc = { path = "rpc" }
-ffxiv_client_structs = { path = "deps/FFXIVClientStructs/rust/lib", features = ["async-resolution"] }
-ffxiv_client_structs_macros = { path = "deps/FFXIVClientStructs/rust/macros" }
-msgbox = "0.7.0"
-# deno_core = "0.191.0"
-# deno_ast = { version = "0.27.1", features = ["transpiling"] }
-inventory = "0.3.6"
-itertools = "0.10.5"
-rustc-hash = "1.1.0"
-retour = { version = "0.3.0", features = ["static-detour"] }
-uuid = { version = "1.4.0", features = ["v4", "fast-rng"] }
-async-trait = "0.1.71"
-
-[build-dependencies]
-chrono = { workspace = true }
-
-#############
-# Workspace #
-#############
 [workspace]
-members = [".", "macros", "injector", "loader", "rpc", "hlrt"]
-default-members = [".", "injector", "loader", "rpc", "hlrt"]
+resolver = "2"
+members = ["devtool", "macros", "injector", "loader", "rpc", "cef-sys", "llrt", "hlrt"]
+default-members = ["devtool"]
 
 [workspace.dependencies]
+# members
+cef-sys = { path = "cef-sys" }
+grebuloff-macros = { path = "macros" }
+grebuloff-rpc = { path = "rpc" }
+
+# general deps
 dll-syringe = { version = "0.15.2", default-features = false }
 tokio = { version = "1.28.2", features = ["full"] }
 anyhow = { version = "1.0.71" }

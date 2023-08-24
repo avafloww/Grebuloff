@@ -1,6 +1,6 @@
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
-use syn::{Data, ItemFn, TraitItemFn, Type};
+use syn::{parse::Parser, Data, ItemFn, ItemStruct, TraitItemFn, Type, DeriveInput};
 
 fn addr_table_name(name: String) -> Ident {
     format_ident!("{}AddressTable", name)
@@ -273,4 +273,95 @@ pub fn __fn_detour_symbol(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let sym = format_ident!("__detour__{}", fn_name);
 
     quote! { #sym }.into()
+}
+
+#[proc_macro_attribute]
+pub fn ref_count(
+    _args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let mut item_struct = syn::parse_macro_input!(input as ItemStruct);
+
+    match item_struct.fields {
+        syn::Fields::Named(ref mut fields) => {
+            if fields
+                .named
+                .iter()
+                .any(|f| f.ident.as_ref().unwrap() == "ref_count")
+            {
+                panic!("ref_count attribute cannot be applied to a struct with a field named ref_count");
+            }
+
+            fields.named.push(
+                syn::Field::parse_named
+                    .parse2(quote! { ref_count: std::sync::atomic::AtomicIsize })
+                    .unwrap(),
+            );
+        }
+        _ => panic!("ref_count attribute can only be applied to a struct with named fields"),
+    }
+
+    return quote! {
+        #item_struct
+    }
+    .into();
+}
+
+#[proc_macro_derive(RefCount)]
+pub fn ref_count_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = syn::parse_macro_input!(input as DeriveInput);
+
+    let name = &ast.ident;
+    let gen = quote! {
+        impl #name {
+            pub unsafe extern "C" fn add_ref(base: *mut cef_sys::cef_base_ref_counted_t) {
+                let slf = base as *mut Self;
+                let count = (*slf)
+                    .ref_count
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                log::trace!("{}::add_ref, {} -> {}", stringify!(#name), count, count + 1);
+            }
+
+            pub unsafe extern "C" fn release(base: *mut cef_sys::cef_base_ref_counted_t) -> i32 {
+                let slf = base as *mut Self;
+                let count = (*slf)
+                    .ref_count
+                    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst)
+                    - 1;
+
+                if count < 1 {
+                    let slf: Box<Self> = Box::from_raw(slf as *mut Self);
+                    log::trace!("{}::release {} -> 0 (dropping!)", stringify!(#name), count + 1);
+                    drop(slf); // not needed, but just to be extra clear
+                    1
+                } else {
+                    log::trace!("{}::release, {} -> {}", stringify!(#name), count + 1, count);
+                    0
+                }
+            }
+
+            pub unsafe extern "C" fn has_one_ref(base: *mut cef_sys::cef_base_ref_counted_t) -> i32 {
+                let slf = base as *mut Self;
+                let count = (*slf).ref_count.load(std::sync::atomic::Ordering::SeqCst);
+                log::trace!("{}::has_one_ref ({} -> {:?})", stringify!(#name), count, count == 1);
+                if count == 1 {
+                    1
+                } else {
+                    0
+                }
+            }
+
+            pub unsafe extern "C" fn has_at_least_one_ref(base: *mut cef_sys::cef_base_ref_counted_t) -> i32 {
+                let slf = base as *mut Self;
+                let count = (*slf).ref_count.load(std::sync::atomic::Ordering::SeqCst);
+                log::trace!("{}::has_at_least_one_ref ({} -> {:?})", stringify!(#name), count, count >= 1);
+                if count >= 1 {
+                    1
+                } else {
+                    0
+                }
+            }
+        }
+    };
+    gen.into()
 }

@@ -3,6 +3,7 @@ use std::{
     ffi::{c_void, CString},
     mem::ManuallyDrop,
     os::windows::prelude::OsStringExt,
+    path::PathBuf,
 };
 use windows::{
     core::{ComInterface, PCSTR},
@@ -49,6 +50,15 @@ unsafe extern "system" fn DllMain(
     _lpvReserved: *const std::ffi::c_void,
 ) -> bool {
     if fdwReason == DLL_PROCESS_ATTACH {
+        // make sure we're in the right damn process...
+        if !get_exe_path()
+            .file_name()
+            .unwrap()
+            .eq_ignore_ascii_case("ffxiv_dx11.exe")
+        {
+            return false;
+        }
+
         let wakeup_cnt = std::env::var("FFIXV_WAKEUP_CNT");
         if !wakeup_cnt.is_ok() {
             // FFXIV sets this env var for the fork where it executes for real.
@@ -176,6 +186,17 @@ impl TryFrom<String> for GrebuloffRoot {
     }
 }
 
+fn get_exe_path() -> PathBuf {
+    unsafe {
+        let mut exe_path = [0u16; 1024];
+        let exe_path_len = GetModuleFileNameW(None, &mut exe_path);
+
+        std::path::PathBuf::from(std::ffi::OsString::from_wide(
+            &exe_path[..exe_path_len as usize],
+        ))
+    }
+}
+
 fn get_grebuloff_root() -> GrebuloffRoot {
     // try in this order:
     // 1. `GREBULOFF_ROOT` env var, if set
@@ -186,17 +207,8 @@ fn get_grebuloff_root() -> GrebuloffRoot {
         .or_else(|_| {
             // usually we'll be in the game directory, but we might not be
             // ensure we search for grebuloff_root.txt in the game directory
-            let game_dir = unsafe {
-                let mut exe_path = [0u16; 1024];
-                let exe_path_len = GetModuleFileNameW(None, &mut exe_path);
-
-                std::path::PathBuf::from(std::ffi::OsString::from_wide(
-                    &exe_path[..exe_path_len as usize],
-                ))
-            };
-
             std::fs::read_to_string(
-                game_dir
+                get_exe_path()
                     .parent()
                     .map(|p| p.join(ROOT_FILE))
                     .unwrap_or(ROOT_FILE.into()),

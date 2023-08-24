@@ -1,0 +1,19 @@
+[package]
+name = "devtool"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true }
+bindgen = "0.66.1"
+indicatif = "0.17.5"
+reqwest = { version = "0.11.18", features = ["stream"] }
+futures-util = "0.3.28"
+tar = "0.4.39"
+bzip2 = { version = "0.4.4", features = ["tokio"] }
+progress-streams = "1.1.0"
+clap = { version = "4.3.12", features = ["derive"] }
+maplit = "1.0.2"
+cargo = "0.71.0"
+cargo-util = "0.2.4"

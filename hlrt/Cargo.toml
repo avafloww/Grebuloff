@@ -1,0 +1,18 @@
+[package]
+name = "grebuloff-hlrt"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+log = { workspace = true }
+tokio = { workspace = true }
+windows = { workspace = true }
+anyhow = { workspace = true }
+widestring = "1.0.2"
+grebuloff-macros = { workspace = true }
+cef-sys = { workspace = true }
+
+[build-dependencies]
+fs_extra = "1.1.0"
+bindgen = "0.66.1"

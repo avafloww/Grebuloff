@@ -1,10 +1,5 @@
 [alias]
-inject = "run -p grebuloff-injector inject"
-launch = "run -p grebuloff-injector launch"
+do = "run -p devtool"
 
 [build]
 target = "x86_64-pc-windows-msvc"
-out-dir = "dist"
-
-[unstable]
-unstable-options = true
